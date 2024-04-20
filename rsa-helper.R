@@ -6,13 +6,15 @@ rsa <- function(mat1, mat2, method = "spearman") {
   cor(mat1_lower, mat2_lower, use = "pairwise.complete.obs", method = method)
 }
 
-run_permutation_test <- function(mat1, mat2, method = "spearman", nsim = 1000, seed = 42) {
+get_permutations <- function(mat1, mat2, method = "spearman", nsim = 1000, seed = 42) {
   set.seed(seed)
   sims <- sapply(1:nsim, \(sim) {
     idx <- sample(nrow(mat1))
     mat1_perm <- mat1[idx, idx]
     rsa(mat1_perm, mat2, method = method)
   })
-  obs_cor <- rsa(mat1, mat2)
-  sum(abs(obs_cor) < abs(sims)) / nsim
+}
+
+calc_permuted_p <- function(sim_cors, obs_cor) {
+  sum(abs(obs_cor) < abs(sim_cors)) / length(sim_cors)
 }

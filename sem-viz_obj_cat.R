@@ -28,9 +28,13 @@ clip_10mo_cor <- rsa(mat_10mo_mean, clip)
 clip_19mo_cor <- rsa(mat_19mo_mean, clip)
 
 # permutation test
-clip_4mo_p <- run_permutation_test(mat_4mo_mean, clip)
-clip_10mo_p <- run_permutation_test(mat_10mo_mean, clip)
-clip_19mo_p <- run_permutation_test(mat_19mo_mean, clip)
+clip_4mo_perms <- get_permutations(mat_4mo_mean, clip)
+clip_10mo_perms <- get_permutations(mat_10mo_mean, clip)
+clip_19mo_perms <- get_permutations(mat_19mo_mean, clip)
+
+clip_4mo_p <- calc_permuted_p(clip_4mo_perms, clip_4mo_cor)
+clip_10mo_p <- calc_permuted_p(clip_10mo_perms, clip_10mo_cor)
+clip_19mo_p <- calc_permuted_p(clip_19mo_perms, clip_19mo_cor)
 
 # noise ceiling---notably, all very low
 get_noise_ceiling <- function(mats) {
