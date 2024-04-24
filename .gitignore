@@ -160,10 +160,12 @@ cython_debug/
 #.idea/
 
 .DS_Store
+.vscode
+
+assets/
 */original/
 gram-winoground/winoground
 
 .Rproj.user
 .Rhistory
 
-assets/
