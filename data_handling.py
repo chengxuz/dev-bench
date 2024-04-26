@@ -1,65 +1,47 @@
 import os
-import numpy as np
+import re
 import pandas as pd
-from functools import partial
 
-from datasets import Dataset, Image
-from torch.utils.data import DataLoader
+from PIL import Image
+from torch.utils.data import Dataset, DataLoader
 
-def make_dataset(dataset_folder, trial_type=1, manifest_file="manifest.csv"):
+class DevBenchDataset(Dataset):
     """
-    Makes HF Dataset from a given dataset folder and trial type.
+    Dataset from a given dataset folder.
     -----
-    Inputs: 
+    Constructor inputs: 
     - dataset_folder: the path to the folder containing the dataset
       and manifest
-    - trial_type: the trial type of the dataset, indexed by the number of
-      images per trial:
-        * 0: one text per trial (used for embedding extraction)
-        * 1: one image per trial (used for embedding extraction)
-        * 2: two images + two texts per trial (used for pairwise matching)
-        * 4: four images + one text per trial (used for 4AFC trials)
     - manifest_file: the location of the manifest CSV within the 
       dataset folder; should contain one row per trial, with *relative*
       paths to any images
-    Outputs:
-    - ds: an object of class Dataset
     """
-    manifest = pd.read_csv(os.path.join(dataset_folder, manifest_file))
-    for i in range(1, trial_type+1):
-        manifest[f"image{i}"] = [dataset_folder+img for img in manifest[f"image{i}"]]
-    ds = Dataset.from_pandas(manifest)
-    for i in range(1, trial_type+1):
-        ds = ds.cast_column(f"image{i}", Image())
-    ds.trial_type = trial_type
-    return ds
+    def __init__(self, dataset_folder, manifest_file="manifest.csv"):
+        self.manifest = pd.read_csv(os.path.join(dataset_folder, manifest_file))
+        self.num_image_cols = len([c for c in self.manifest.columns if re.compile("image[0-9]").match(c)])
+        self.num_text_cols = len([c for c in self.manifest.columns if re.compile("text[0-9]").match(c)])
+        for i in range(1, self.num_image_cols+1):
+            self.manifest[f"image{i}"] = [Image.open(dataset_folder+img) for img in self.manifest[f"image{i}"]]
 
-def collator(data):
+    def __len__(self):
+        return len(self.manifest)
+
+    def __getitem__(self, idx):
+        row = self.manifest.iloc[idx]
+        images = list(row[[f"image{i}" for i in range(1, self.num_image_cols+1)]])
+        texts = list(row[[f"text{i}" for i in range(1, self.num_text_cols+1)]])
+        return {"images": images, "text": texts}
+
+def collator(batch):
     """
     Collates data, turning it from a list of dicts to a dict of lists.
     -----
     Inputs: 
-    - data: a list of dicts with the same keys for each dict
+    - batch: a list of dicts with the same keys for each dict
     Outputs:
     - a dict of lists
     """
-    return {k: [ex[k] for ex in data] for k in data[0]}
-
-def trial_collator(data, trial_type):
-    """
-    Collates data for a single trial, collapsing images and texts.
-    -----
-    Inputs: 
-    - data: data for a single trial, with 2 or 4 images and 2 or 1 texts
-    - trial_type: the trial type of the dataset
-    Outputs:
-    - a dict of images and texts
-    """
-    image_keys = [f"image{i}" for i in range(1, trial_type+1)]
-    text_keys = [f"text{i}" for i in range (1, (trial_type==2)+2)]
-    images = [data[0][k] for k in image_keys]
-    texts = [data[0][k] for k in text_keys]
-    return {"images": images, "texts": texts}
+    return {key: [item for ex in batch for item in ex[key]] for key in batch[0]}
 
 def make_dataloader(dataset):
     """
@@ -71,9 +53,6 @@ def make_dataloader(dataset):
     Outputs:
     - an object of class Dataloader
     """
-    trial_type = dataset.trial_type
-    batch_size = 1 if trial_type >= 2 else 16
-    collate_fn = partial(trial_collator, trial_type=trial_type) if trial_type >= 2 else collator
-    dl = DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
-    dl.trial_type = trial_type
+    batch_size = 1 if dataset.num_image_cols > 1 or dataset.num_text_cols > 1 else 16
+    dl = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collator)
     return dl
