@@ -27,14 +27,12 @@ get_human_data_vv <- function(manifest_file = "assets/lex-viz_vocab/manifest.csv
   human_data
 }
 
-human_data <- get_human_data_vv()
+human_data_vv <- get_human_data_vv()
 
 ## comparison fxn
 compare_vv <- function(model_data, human_data) {
   model_probs <- model_data |> 
-    mutate(across(starts_with("image"), exp),
-           rowsum = image1 + image2 + image3 + image4,
-           across(starts_with("image"), \(x) x / rowsum)) |> 
+    softmax_images() |> 
     select(trial, starts_with("image")) |> 
     pivot_longer(cols = -trial, names_to = "image", values_to = "prob")
   all_cors <- human_data |> 
@@ -55,7 +53,7 @@ openclip_cors <- lapply(oc_files, \(ocf) {
     as_tibble() |> 
     `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
     mutate(trial = seq_along(image1))
-  cors <- compare_vv(res, human_data) |> 
+  cors <- compare_vv(res, human_data_vv) |> 
     mutate(epoch = epoch)
 }) |> bind_rows()
 
@@ -68,5 +66,5 @@ ggplot(openclip_cors, aes(x = log(epoch), y = cor, col = log(age))) +
        y = "Error correlation",
        col = "log(Age)")
 
-mod_lm <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
+mod_vv <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
   tidy()

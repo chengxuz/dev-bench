@@ -18,3 +18,11 @@ get_permutations <- function(mat1, mat2, method = "spearman", nsim = 1000, seed 
 calc_permuted_p <- function(sim_cors, obs_cor) {
   sum(abs(obs_cor) < abs(sim_cors)) / length(sim_cors)
 }
+
+softmax_images <- function(data) {
+  data |> 
+    mutate(across(starts_with("image"), exp),
+           rowsum = rowSums(across(starts_with("image"))),
+           across(starts_with("image"), \(x) x / rowsum)) |> 
+    select(-rowsum)
+}
