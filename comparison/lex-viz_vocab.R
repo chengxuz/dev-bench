@@ -3,10 +3,8 @@ library(here)
 library(broom)
 library(reticulate)
 
-oc_dir <- here("evals/lex-viz_vocab/openclip/")
-
 np <- import("numpy")
-
+oc_dir <- here("evals/lex-viz_vocab/openclip/")
 oc_files <- list.files(oc_dir)
 
 ## make human data
@@ -50,6 +48,7 @@ compare_vv <- function(model_data, human_data) {
   all_cors
 }
 
+## comparisons for openclip
 openclip_cors <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf)) |> 
