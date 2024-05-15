@@ -6,12 +6,12 @@ library(psych)
 source("comparison/rsa-helper.R")
 
 # read data
+np <- import("numpy")
+clip <- np$load(here("evals/sem-viz_obj_cat/clip.npy"))
+
 mat_4mo <- readMat(here("assets/sem-viz_obj_cat/original/Matrices/4months.mat"))$Matwindow[1][[1]]
 mat_10mo <- readMat(here("assets/sem-viz_obj_cat/original/Matrices/10months.mat"))$Matwindow[1][[1]]
 mat_19mo <- readMat(here("assets/sem-viz_obj_cat/original/Matrices/19months.mat"))$Matwindow[1][[1]]
-
-np <- import("numpy")
-clip <- np$load(here("evals/sem-viz_obj_cat/clip.npy"))
 
 # get mean matrices and correlations
 collapse_matrix <- function(mat) {
