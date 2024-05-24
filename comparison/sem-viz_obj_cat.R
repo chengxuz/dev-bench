@@ -3,7 +3,7 @@ library(here)
 library(R.matlab)
 library(reticulate)
 library(psych)
-source("comparison/rsa-helper.R")
+source("comparison/stats-helper.R")
 
 # read data
 np <- import("numpy")
