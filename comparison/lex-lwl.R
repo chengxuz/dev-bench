@@ -5,29 +5,20 @@ library(reticulate)
 source("comparison/stats-helper.R")
 
 np <- import("numpy")
-oc_dir <- here("evals/gram-winoground/openclip/")
-oc_files <- list.files(oc_dir)
+clip <- np$load(here("evals/lex-lwl/lwl_clip.npy"))
 
 ## make human data
-get_human_data_wg <- function(manifest_file = "assets/gram-winoground/manifest.csv",
-                              data_file = "evals/gram-winoground/human.jsonl") {
-  included_trials <- read_csv(manifest_file) |> 
-    mutate(trial = as.numeric(str_extract(image1, "(?<=ex_)[0-9]+(?=_img)")) + 1) |> 
-    pull(trial)
-  human_data <- read_lines(data_file) |> 
-    str_remove_all('\\{\\"label\\"\\: \\"') |> 
-    str_replace_all('\\", \\"score\\"\\: ', ',') |> 
-    str_remove_all('\\}') |> 
-    I() |> 
-    read_csv(col_names = c("label", "score")) |> 
-    separate_wider_delim(label, delim = "_", names = c("trial", "text", "image")) |> 
-    mutate(trial = as.numeric(trial) + 1,
-           image = (str_sub(image, 2) |> as.numeric()) + 1,
-           text = (str_sub(text, 2) |> as.numeric()) + 1,
-           pair = glue("image{image}text{text}")) |> 
-    select(-image, -text) |> 
-    filter(trial %in% included_trials) |> 
-    mutate(trial = sapply(trial, \(t) which(included_trials == t)))
+get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest.csv",
+                               data_file = "evals/lex-lwl/experiment_info/eye.tracking.csv") {
+  novel_words <- c("wug", "dax", "dofa", "fep", "pifo", "kreeb", "modi", "toma")
+  manifest <- read_csv(manifest_file) |> 
+    filter(!text1 %in% novel_words,
+           !text2 %in% novel_words)
+  human_data <- read_csv(data_file) |> 
+    filter(word.type == "Familiar-Familiar") |> 
+    group_by(age.grp, word) |> 
+    summarise(mean_prop = mean(prop),
+              n = n())
 }
 
 human_data_wg <- get_human_data_wg()
