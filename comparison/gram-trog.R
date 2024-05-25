@@ -66,4 +66,27 @@ ggplot(openclip_div, aes(x = log(epoch), y = kl)) +
        y = "Response KL divergence",
        col = "log(Age)")
 
+## comparisons for other models
+trog_files <- list.files("evals/gram-trog", pattern = "*.npy")
+
+other_res <- lapply(trog_files, \(trogf) {
+  res <- np$load(here("evals/gram-trog", trogf)) |> 
+    as_tibble()
+  res <- res |> 
+    `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
+    mutate(trial = seq_along(image1))
+  acc <- res |> 
+    mutate(correct = image1 > image2 & image1 > image3 & image1 > image4) |> 
+    summarise(accuracy = mean(correct)) |> 
+    pull(accuracy)
+  kls <- compare_trog(res, human_data_trog) |> 
+    mutate(model = trogf,
+           accuracy = acc)
+}) |> bind_rows()
+
+ggplot(other_res, 
+       aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
+  geom_point() + 
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
+  theme_classic()
 

@@ -131,9 +131,6 @@ vv_files <- list.files("evals/lex-viz_vocab", pattern = "*.npy")
 other_res <- lapply(vv_files, \(vvf) {
   res <- np$load(here("evals/lex-viz_vocab", vvf)) |> 
     as_tibble()
-  if (vvf == "vizvocab_blip.npy") {
-    res <- res[5:8]
-  }
   res <- res |> 
     `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
     mutate(trial = seq_along(image1))
@@ -146,9 +143,7 @@ other_res <- lapply(vv_files, \(vvf) {
            accuracy = acc)
 }) |> bind_rows()
 
-vv_plot <- other_res |> 
-  filter(!model %in% c("clip-b-32.npy", "vizvocab_blip_new.npy", "vizvocab_bridgewater.npy"))
-ggplot(vv_plot, 
+ggplot(other_res, 
        aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
   geom_point() + 
   scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
