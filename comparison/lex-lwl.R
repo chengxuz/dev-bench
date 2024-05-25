@@ -18,7 +18,15 @@ get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest.csv",
     filter(word.type == "Familiar-Familiar") |> 
     group_by(age.grp, word) |> 
     summarise(mean_prop = mean(prop),
-              n = n())
+              n = n()) # |> 
+    separate_wider_regex(cols = pair,
+                         patterns = c(image = "(?:image[12])", 
+                                      text = "(?:text[12])")) |> 
+    pivot_wider(names_from = image,
+                values_from = score) |> 
+    mutate(rowsum = rowSums(across(starts_with("image"))),
+           across(starts_with("image"), \(x) x / rowsum)) |> 
+    select(-rowsum)
 }
 
 human_data_wg <- get_human_data_wg()

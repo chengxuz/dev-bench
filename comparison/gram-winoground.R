@@ -41,24 +41,23 @@ compare_wg <- function(model_data, human_data) {
     pivot_wider(names_from = image,
                 values_from = score) |> 
     mutate(rowsum = rowSums(across(starts_with("image"))),
-           across(starts_with("image"), \(x) x / rowsum)) |> 
+           across(starts_with("image"), \(x) x / rowsum),
+           trial = glue("{trial}_{text}")) |> 
     select(-rowsum)
   
-  full_data <- model_data |> 
+  model_data_by_text <- model_data |> 
     pivot_longer(cols = starts_with("image"),
                  names_to = c("image", "text"),
                  names_pattern = "(image[12])(text[12])",
                  values_to = "score") |> 
     pivot_wider(names_from = image,
                 values_from = score) |> 
-    softmax_images() |> 
-    left_join(human_data_by_text, by = join_by(trial, text)) |> 
-    mutate(error_model = ifelse(text == "text2", image1.x, image2.x),
-           error_human = ifelse(text == "text2", image1.y, image2.y))
+    mutate(trial = glue("{trial}_{text}"))
   
-  all_cors <- cor(full_data$error_model,
-                  full_data$error_human,
-                  use = "pairwise.complete.obs")
+  opt_kl = get_opt_kl(human_data_by_text, model_data_by_text)
+  tibble(kl = opt_kl$objective,
+         beta = opt_kl$solution,
+         iters = opt_kl$iterations)
 }
 
 ## comparisons for openclip
@@ -68,14 +67,13 @@ openclip_cors <- lapply(oc_files, \(ocf) {
     as_tibble() |> 
     `colnames<-`(value = c("image1text1", "image2text1", "image1text2", "image2text2")) |> 
     mutate(trial = seq_along(image1text1))
-  cors <- compare_wg(res, human_data_wg)
-  tibble(cor = cors,
-         epoch = epoch)
+  kls <- compare_wg(res, human_data_wg) |> 
+    mutate(epoch = epoch)
 }) |> bind_rows()
 
-ggplot(openclip_cors, aes(x = log(epoch), y = cor)) +
+ggplot(openclip_cors, aes(x = log(epoch), y = kl)) +
   geom_point() +
-  geom_smooth(method = "lm") +
+  geom_smooth() +
   scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
@@ -83,3 +81,27 @@ ggplot(openclip_cors, aes(x = log(epoch), y = cor)) +
 
 mod_wg <- lm(cor ~ log(epoch), data = openclip_cors) |> 
   tidy()
+
+## comparisons for other models
+wg_files <- list.files("evals/gram-winoground", pattern = "*.npy")
+
+other_res <- lapply(wg_files, \(wgf) {
+  res <- np$load(here("evals/gram-winoground", wgf)) |> 
+    as_tibble()
+  res <- res |> 
+    `colnames<-`(value = c("image1text1", "image2text1", "image1text2", "image2text2")) |> 
+    mutate(trial = seq_along(image1text1))
+  acc <- res |> 
+    mutate(correct = ((image1text1 > image1text2) + (image2text2 > image2text1))/2) |> 
+    summarise(accuracy = mean(correct)) |> 
+    pull(accuracy)
+  kls <- compare_wg(res, human_data_wg) |> 
+    mutate(model = wgf,
+           accuracy = acc)
+}) |> bind_rows()
+
+ggplot(other_res, 
+       aes(x = accuracy, y = kl, shape = model)) + 
+  geom_point() + 
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
+  theme_classic()

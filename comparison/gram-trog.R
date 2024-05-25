@@ -85,7 +85,7 @@ other_res <- lapply(trog_files, \(trogf) {
 }) |> bind_rows()
 
 ggplot(other_res, 
-       aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
+       aes(x = accuracy, y = kl, shape = model)) + 
   geom_point() + 
   scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
   theme_classic()
