@@ -12,73 +12,91 @@ get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest.csv",
                                data_file = "evals/lex-lwl/experiment_info/eye.tracking.csv") {
   novel_words <- c("wug", "dax", "dofa", "fep", "pifo", "kreeb", "modi", "toma")
   manifest <- read_csv(manifest_file) |> 
+    mutate(trial = seq_along(text1)) |> 
     filter(!text1 %in% novel_words,
-           !text2 %in% novel_words)
+           !text2 %in% novel_words) |> 
+    select(trial, text1, text2) |> 
+    pivot_longer(cols = c(text1, text2), names_to = "options", values_to = "word") |> 
+    mutate(trial = glue("{trial}_{options}")) |> 
+    select(trial, word, options)
   human_data <- read_csv(data_file) |> 
     filter(word.type == "Familiar-Familiar") |> 
     group_by(age.grp, word) |> 
     summarise(mean_prop = mean(prop),
-              n = n()) # |> 
-    separate_wider_regex(cols = pair,
-                         patterns = c(image = "(?:image[12])", 
-                                      text = "(?:text[12])")) |> 
-    pivot_wider(names_from = image,
-                values_from = score) |> 
-    mutate(rowsum = rowSums(across(starts_with("image"))),
-           across(starts_with("image"), \(x) x / rowsum)) |> 
-    select(-rowsum)
+              n = n()) |> 
+    left_join(manifest, by = join_by(word)) |> 
+    mutate(image1 = ifelse(options == "text1", mean_prop, 1-mean_prop),
+           image2 = ifelse(options == "text2", mean_prop, 1-mean_prop))
 }
 
-human_data_wg <- get_human_data_wg()
+human_data_lwl <- get_human_data_lwl()
 
 ## comparison fxn
-compare_wg <- function(model_data, human_data) {
-  human_data_by_text <- human_data |> 
-    separate_wider_regex(cols = pair,
-                         patterns = c(image = "(?:image[12])", 
-                                      text = "(?:text[12])")) |> 
-    pivot_wider(names_from = image,
-                values_from = score) |> 
-    mutate(rowsum = rowSums(across(starts_with("image"))),
-           across(starts_with("image"), \(x) x / rowsum)) |> 
-    select(-rowsum)
-  
-  full_data <- model_data |> 
+compare_lwl <- function(model_data, human_data) {
+  model_data_by_text <- model_data |> 
     pivot_longer(cols = starts_with("image"),
                  names_to = c("image", "text"),
                  names_pattern = "(image[12])(text[12])",
                  values_to = "score") |> 
     pivot_wider(names_from = image,
                 values_from = score) |> 
-    softmax_images() |> 
-    left_join(human_data_by_text, by = join_by(trial, text)) |> 
-    mutate(error_model = ifelse(text == "text2", image1.x, image2.x),
-           error_human = ifelse(text == "text2", image1.y, image2.y))
+    mutate(trial = glue("{trial}_{text}"),
+           correct = ifelse(text == "text1", image1 > image2, image2 > image1)) |> 
+    filter(trial %in% human_data$trial)
   
-  all_cors <- cor(full_data$error_model,
-                  full_data$error_human,
-                  use = "pairwise.complete.obs")
+  human_data_nested <- human_data |> 
+    select(age_bin = age.grp, trial, starts_with("image")) |> 
+    nest(data = -age_bin) |> 
+    mutate(opt_kl = lapply(data, \(d) {get_opt_kl(d, model_data_by_text)}),
+           kl = sapply(opt_kl, \(r) {r$objective}),
+           beta = sapply(opt_kl, \(r) {r$solution}),
+           iters = sapply(opt_kl, \(r) {r$iterations}),
+           accuracy = mean(model_data_by_text$correct, na.rm = TRUE)) |> 
+    select(-data, -opt_kl)
 }
 
 ## comparisons for openclip
-openclip_cors <- lapply(oc_files, \(ocf) {
+openclip_div <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf)) |> 
     as_tibble() |> 
     `colnames<-`(value = c("image1text1", "image2text1", "image1text2", "image2text2")) |> 
     mutate(trial = seq_along(image1text1))
-  cors <- compare_wg(res, human_data_wg)
-  tibble(cor = cors,
-         epoch = epoch)
+  kls <- compare_lwl(res, human_data_lwl) |> 
+    mutate(epoch = epoch)
 }) |> bind_rows()
 
-ggplot(openclip_cors, aes(x = log(epoch), y = cor)) +
+ggplot(openclip_div, aes(x = log(epoch), y = kl, col = age_bin)) +
   geom_point() +
-  geom_smooth(method = "lm") +
+  geom_smooth(aes(group = age_bin), span = 1) +#, method = "lm") +
   scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
-       y = "Error correlation")
+       y = "Response KL divergence",
+       col = "log(Age)")
 
-mod_wg <- lm(cor ~ log(epoch), data = openclip_cors) |> 
+mod_lwl <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
   tidy()
+
+## comparisons for other models
+lwl_files <- list.files("evals/lex-lwl", pattern = "*.npy")
+
+other_res <- lapply(lwl_files, \(lwlf) {
+  res <- np$load(here("evals/lex-lwl", lwlf)) |> 
+    as_tibble()
+  res <- res |> 
+    `colnames<-`(value = c("image1text1", "image2text1", "image1text2", "image2text2")) |> 
+    mutate(trial = seq_along(image1text1))
+  # acc <- res |> 
+  #   mutate(correct = ((image1text1 > image1text2) + (image2text2 > image2text1))/2) |> 
+  #   summarise(accuracy = mean(correct)) |> 
+  #   pull(accuracy)
+  kls <- compare_lwl(res, human_data_lwl) |> 
+    mutate(model = lwlf)
+}) |> bind_rows()
+
+ggplot(other_res, 
+       aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
+  geom_point() + 
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
+  theme_classic()
