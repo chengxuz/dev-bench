@@ -29,13 +29,41 @@ get_human_data_trog <- function(manifest_file = "assets/gram-trog/manifest.csv",
            image = glue("images/{response}.png")) |> 
     left_join(manifest, by = join_by(text1, image)) |> 
     arrange(trial, option) |> 
-    filter(!is.na(option))
+    filter(!is.na(option)) |> 
+    ungroup() |> 
+    select(trial, text1, option, prop) |> 
+    pivot_wider(names_from = option, values_from = prop) |> 
+    mutate(across(starts_with("image"), \(i) replace_na(i, 0)))
 }
 
 human_data_trog <- get_human_data_trog()
 
 ## comparison fxn
 compare_trog <- function(model_data, human_data) {
-
-  
+  opt_kl = get_opt_kl(human_data |> select(trial, starts_with("image")), model_data)
+  tibble(kl = opt_kl$objective,
+         beta = opt_kl$solution,
+         iters = opt_kl$iterations)
 }
+
+## comparisons for openclip
+openclip_div <- lapply(oc_files, \(ocf) {
+  epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
+  res <- np$load(here(oc_dir, ocf)) |> 
+    as_tibble() |> 
+    `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
+    mutate(trial = seq_along(image1))
+  kls <- compare_trog(res, human_data_trog) |> 
+    mutate(epoch = epoch)
+}) |> bind_rows()
+
+ggplot(openclip_div, aes(x = log(epoch), y = kl)) +
+  geom_point() +
+  geom_smooth(span = 1) +#, method = "lm") +
+  scale_colour_continuous() +
+  theme_classic() +
+  labs(x = "log(Epoch)",
+       y = "Response KL divergence",
+       col = "log(Age)")
+
+

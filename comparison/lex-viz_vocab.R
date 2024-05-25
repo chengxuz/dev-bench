@@ -51,6 +51,17 @@ compare_vv <- function(model_data, human_data) {
     select(-data, -opt_kl)
 }
 
+# compare_vv_fixed <- function(model_data, human_data) {
+#   human_data_nested <- human_data |> 
+#     select(age_bin, trial, starts_with("image")) |> 
+#     nest(data = -age_bin) |> 
+#     mutate(opt_kl = lapply(data, \(d) {get_reg_kl(d, model_data, opt$solution)}),
+#            kl = sapply(opt_kl, \(r) {r$objective}),
+#            beta = sapply(opt_kl, \(r) {r$solution}),
+#            iters = sapply(opt_kl, \(r) {r$iterations})) |> 
+#     select(-data, -opt_kl)
+# }
+
 ## comparisons for openclip
 openclip_div <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
@@ -62,9 +73,49 @@ openclip_div <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
+# openclip_div_allepoch <- human_data_vv |>
+#   select(age_bin, trial, starts_with("image")) |>
+#   nest(data = -age_bin) |>
+#   mutate(
+#     opt_kl = lapply(data, \(d) {
+#       nloptr(x0 = 1,
+#              eval_f = partial(get_opt_kl_allepoch, 
+#                               human_probs_wide = d,
+#                               model_data = openclip_res),
+#              lb = .1, ub = 15,
+#              opts = list(algorithm = "NLOPT_GN_DIRECT_L",
+#                          ftol_abs = 1e-4,
+#                          maxeval = 200))
+#     }),
+#     kl = sapply(opt_kl, \(r) r$objective),
+#     beta = sapply(opt_kl, \(r) r$solution),
+#     iters = sapply(opt_kl, \(r) r$iterations)) |> 
+#   mutate(all_kl = map2(data, beta, \(d, b) {
+#     lapply(oc_files, \(ocf) {
+#       epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
+#       res <- np$load(here(oc_dir, ocf)) |>
+#         as_tibble() |>
+#         `colnames<-`(value = c("image1", "image2", "image3", "image4")) |>
+#         mutate(trial = seq_along(image1))
+#       val <- get_reg_kl(d, res, b)
+#       val$epoch = epoch
+#       val
+#     }) |> bind_rows()
+#   })) |> select(-data) |> unnest(all_kl)
+
+# openclip_div_allages <- lapply(oc_files, \(ocf) {
+#   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
+#   res <- np$load(here(oc_dir, ocf)) |> 
+#     as_tibble() |> 
+#     `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
+#     mutate(trial = seq_along(image1))
+#   kls <- compare_vv_fixed(res, human_data_vv) |> 
+#     mutate(epoch = epoch)
+# }) |> bind_rows()
+
 ggplot(openclip_div, aes(x = log(epoch), y = kl, col = age_bin)) +
   geom_point() +
-  geom_smooth(aes(group = age_bin)) +#, method = "lm") +
+  geom_smooth(aes(group = age_bin), span = 1) +#, method = "lm") +
   scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
@@ -73,3 +124,32 @@ ggplot(openclip_div, aes(x = log(epoch), y = kl, col = age_bin)) +
 
 mod_vv <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
   tidy()
+
+## comparisons for other models
+vv_files <- list.files("evals/lex-viz_vocab", pattern = "*.npy")
+
+other_res <- lapply(vv_files, \(vvf) {
+  res <- np$load(here("evals/lex-viz_vocab", vvf)) |> 
+    as_tibble()
+  if (vvf == "vizvocab_blip.npy") {
+    res <- res[5:8]
+  }
+  res <- res |> 
+    `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
+    mutate(trial = seq_along(image1))
+  acc <- res |> 
+    mutate(correct = image1 > image2 & image1 > image3 & image1 > image4) |> 
+    summarise(accuracy = mean(correct)) |> 
+    pull(accuracy)
+  kls <- compare_vv(res, human_data_vv) |> 
+    mutate(model = vvf,
+           accuracy = acc)
+}) |> bind_rows()
+
+vv_plot <- other_res |> 
+  filter(!model %in% c("clip-b-32.npy", "vizvocab_blip_new.npy", "vizvocab_bridgewater.npy"))
+ggplot(vv_plot, 
+       aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
+  geom_point() + 
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
+  theme_classic()
