@@ -379,7 +379,7 @@ def get_all_image_feats_cvcl(dataloader, preprocess, model):
             images = [preprocess(img.convert("RGB")) for img in d["images"]]
             images = torch.stack(images).to(model.device)
             image_features = model.encode_image(images)
-            print(image_features.shape)
+            #print(image_features.shape)
             #processed_inputs = processor(images=d["images"], return_tensors="pt")
             #pixel_values = processed_inputs["pixel_values"]
             
