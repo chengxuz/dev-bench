@@ -1,6 +1,8 @@
 library(tidyverse)
 library(here)
+library(glue)
 library(broom)
+library(latex2exp)
 library(reticulate)
 source("comparison/stats-helper.R")
 
@@ -113,20 +115,24 @@ openclip_div <- lapply(oc_files, \(ocf) {
 #     mutate(epoch = epoch)
 # }) |> bind_rows()
 
-ggplot(openclip_div, aes(x = log(epoch), y = kl, col = age_bin)) +
+vv_oc <- ggplot(openclip_div, aes(x = log(epoch), y = kl, col = as.factor(age_bin))) +
   geom_point() +
-  geom_smooth(aes(group = age_bin), span = 1) +#, method = "lm") +
-  scale_colour_continuous() +
+  geom_smooth(span = 1) +#, method = "lm") +
+  # scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
-       y = "Response KL divergence",
-       col = "log(Age)")
+       y = TeX("$D^*_{KL}$"),
+       col = "Age")
 
-mod_vv <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
-  tidy()
+ggsave("comparison/lex-vv-oc.png", 
+       vv_oc, 
+       width = 6.2, height = 4.2, units = "in")
+
+# mod_vv <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
+#   tidy()
 
 ## comparisons for other models
-vv_files <- list.files("evals/lex-viz_vocab", pattern = "*.npy")
+vv_files <- c(list.files("evals/lex-viz_vocab", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
 other_res <- lapply(vv_files, \(vvf) {
   res <- np$load(here("evals/lex-viz_vocab", vvf)) |> 
@@ -139,12 +145,22 @@ other_res <- lapply(vv_files, \(vvf) {
     summarise(accuracy = mean(correct)) |> 
     pull(accuracy)
   kls <- compare_vv(res, human_data_vv) |> 
-    mutate(model = vvf,
+    mutate(model = vvf |> str_remove_all("vizvocab_") |> str_remove_all(".npy"),
            accuracy = acc)
-}) |> bind_rows()
+}) |> bind_rows() |> 
+  mutate(model = str_replace_all(model, model_rename))
 
-ggplot(other_res, 
+vv_all <- ggplot(other_res, 
        aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
   geom_point() + 
-  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
-  theme_classic()
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
+  theme_classic() +
+  labs(x = "Accuracy",
+       y = TeX("$D^*_{KL}$"),
+       shape = "Model",
+       col = "Age")
+
+ggsave("comparison/lex-vv-all.png", 
+       vv_all, 
+       width = 6.2, height = 4.2, units = "in")
+

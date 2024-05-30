@@ -1,6 +1,7 @@
 library(tidyverse)
 library(here)
 library(glue)
+library(latex2exp)
 library(reticulate)
 source("comparison/stats-helper.R")
 
@@ -71,19 +72,23 @@ openclip_cors <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-ggplot(openclip_cors, aes(x = log(epoch), y = kl)) +
+wg_oc <- ggplot(openclip_cors, aes(x = log(epoch), y = kl)) +
   geom_point() +
   geom_smooth() +
   scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
-       y = "Error correlation")
+       y = TeX("$D^*_{KL}$"))
 
-mod_wg <- lm(cor ~ log(epoch), data = openclip_cors) |> 
-  tidy()
+ggsave("comparison/gram-wg-oc.png", 
+       wg_oc, 
+       width = 6.2, height = 4.2, units = "in")
+
+# mod_wg <- lm(cor ~ log(epoch), data = openclip_cors) |> 
+#   tidy()
 
 ## comparisons for other models
-wg_files <- list.files("evals/gram-winoground", pattern = "*.npy")
+wg_files <- c(list.files("evals/gram-winoground", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
 other_res <- lapply(wg_files, \(wgf) {
   res <- np$load(here("evals/gram-winoground", wgf)) |> 
@@ -96,12 +101,20 @@ other_res <- lapply(wg_files, \(wgf) {
     summarise(accuracy = mean(correct)) |> 
     pull(accuracy)
   kls <- compare_wg(res, human_data_wg) |> 
-    mutate(model = wgf,
+    mutate(model = wgf |> str_remove_all("winoground_") |> str_remove_all(".npy"),
            accuracy = acc)
-}) |> bind_rows()
+}) |> bind_rows() |> 
+  mutate(model = str_replace_all(model, model_rename))
 
-ggplot(other_res, 
+wg_all <- ggplot(other_res, 
        aes(x = accuracy, y = kl, shape = model)) + 
   geom_point() + 
-  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
-  theme_classic()
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
+  theme_classic() +
+  labs(x = "Accuracy",
+       y = TeX("$D^*_{KL}$"),
+       shape = "Model")
+
+ggsave("comparison/gram-wg-all.png", 
+       wg_all, 
+       width = 6.2, height = 4.2, units = "in")

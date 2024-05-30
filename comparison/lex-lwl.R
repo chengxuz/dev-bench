@@ -1,11 +1,13 @@
 library(tidyverse)
 library(here)
 library(glue)
+library(latex2exp)
 library(reticulate)
 source("comparison/stats-helper.R")
 
 np <- import("numpy")
-clip <- np$load(here("evals/lex-lwl/lwl_clip.npy"))
+oc_dir <- here("evals/lex-lwl/openclip/")
+oc_files <- list.files(oc_dir)
 
 ## make human data
 get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest.csv",
@@ -66,20 +68,24 @@ openclip_div <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-ggplot(openclip_div, aes(x = log(epoch), y = kl, col = age_bin)) +
+lwl_oc <- ggplot(openclip_div, aes(x = log(epoch), y = kl, col = as.factor(age_bin))) +
   geom_point() +
-  geom_smooth(aes(group = age_bin), span = 1) +#, method = "lm") +
-  scale_colour_continuous() +
+  geom_smooth(span = 1) +#, method = "lm") +
+  # scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
-       y = "Response KL divergence",
-       col = "log(Age)")
+       y = TeX("$D^*_{KL}$"),
+       col = "Age")
 
-mod_lwl <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
-  tidy()
+ggsave("comparison/lex-lwl-oc.png", 
+       lwl_oc, 
+       width = 6.2, height = 4.2, units = "in")
+
+# mod_lwl <- lm(cor ~ log(epoch) * age, data = openclip_cors) |> 
+#   tidy()
 
 ## comparisons for other models
-lwl_files <- list.files("evals/lex-lwl", pattern = "*.npy")
+lwl_files <- c(list.files("evals/lex-lwl", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
 other_res <- lapply(lwl_files, \(lwlf) {
   res <- np$load(here("evals/lex-lwl", lwlf)) |> 
@@ -87,16 +93,29 @@ other_res <- lapply(lwl_files, \(lwlf) {
   res <- res |> 
     `colnames<-`(value = c("image1text1", "image2text1", "image1text2", "image2text2")) |> 
     mutate(trial = seq_along(image1text1))
-  # acc <- res |> 
-  #   mutate(correct = ((image1text1 > image1text2) + (image2text2 > image2text1))/2) |> 
-  #   summarise(accuracy = mean(correct)) |> 
-  #   pull(accuracy)
+  acc <- res |>
+    mutate(correct = case_when(
+      trial %in% c(4, 5, 8, 11) ~ image1text1 > image2text1,
+      trial %in% c(2, 3, 15, 16) ~ image2text2 > image1text2)) |>
+    summarise(accuracy = mean(correct, na.rm = TRUE)) |>
+    pull(accuracy)
   kls <- compare_lwl(res, human_data_lwl) |> 
-    mutate(model = lwlf)
-}) |> bind_rows()
+    mutate(model = lwlf |> str_remove_all("lwl_") |> str_remove_all(".npy"),
+           accuracy = acc)
+}) |> bind_rows() |> 
+  mutate(model = str_replace_all(model, model_rename))
 
-ggplot(other_res, 
+lwl_all <- ggplot(other_res, 
        aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
   geom_point() + 
-  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
-  theme_classic()
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
+  theme_classic() +
+  labs(x = "Accuracy",
+       y = TeX("$D^*_{KL}$"),
+       shape = "Model",
+       col = "Age")
+
+ggsave("comparison/lex-lwl-all.png", 
+       lwl_all, 
+       width = 6.2, height = 4.2, units = "in")
+

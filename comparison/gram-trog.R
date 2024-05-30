@@ -1,6 +1,7 @@
 library(tidyverse)
 library(here)
 library(glue)
+library(latex2exp)
 library(lubridate)
 library(reticulate)
 source("comparison/stats-helper.R")
@@ -57,17 +58,20 @@ openclip_div <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-ggplot(openclip_div, aes(x = log(epoch), y = kl)) +
+trog_oc <- ggplot(openclip_div, aes(x = log(epoch), y = kl)) +
   geom_point() +
   geom_smooth(span = 1) +#, method = "lm") +
   scale_colour_continuous() +
   theme_classic() +
   labs(x = "log(Epoch)",
-       y = "Response KL divergence",
-       col = "log(Age)")
+       y = TeX("$D^*_{KL}$"))
+
+ggsave("comparison/gram-trog-oc.png", 
+       trog_oc, 
+       width = 6.2, height = 4.2, units = "in")
 
 ## comparisons for other models
-trog_files <- list.files("evals/gram-trog", pattern = "*.npy")
+trog_files <- c(list.files("evals/gram-trog", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
 other_res <- lapply(trog_files, \(trogf) {
   res <- np$load(here("evals/gram-trog", trogf)) |> 
@@ -80,13 +84,20 @@ other_res <- lapply(trog_files, \(trogf) {
     summarise(accuracy = mean(correct)) |> 
     pull(accuracy)
   kls <- compare_trog(res, human_data_trog) |> 
-    mutate(model = trogf,
+    mutate(model = trogf |> str_remove_all("trog_") |> str_remove_all(".npy"),
            accuracy = acc)
-}) |> bind_rows()
+}) |> bind_rows() |> 
+  mutate(model = str_replace_all(model, model_rename))
 
-ggplot(other_res, 
+trog_all <- ggplot(other_res, 
        aes(x = accuracy, y = kl, shape = model)) + 
   geom_point() + 
-  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2)) +
-  theme_classic()
+  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
+  theme_classic() +
+  labs(x = "Accuracy",
+       y = TeX("$D^*_{KL}$"),
+       shape = "Model")
 
+ggsave("comparison/gram-trog-all.png", 
+       trog_all, 
+       width = 6.2, height = 4.2, units = "in")

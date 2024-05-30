@@ -2,6 +2,16 @@ library(tidyverse)
 library(philentropy)
 library(nloptr)
 
+model_rename <- c("blip" = "BLIP",
+                  "bridgetower" = "BridgeTower",
+                  "clip_small" = "CLIP-base",
+                  "clip_large" = "CLIP-large",
+                  "cvcl" = "CVCL",
+                  "flava" = "FLAVA",
+                  "openclip/openclip_epoch_256" = "OpenCLIP",
+                  "vilt" = "ViLT")
+
+## RSA functions
 rsa <- function(mat1, mat2, method = "spearman") {
   mat1_lower <- mat1[lower.tri(mat1)]
   mat2_lower <- mat2[lower.tri(mat2)]
@@ -21,6 +31,7 @@ calc_permuted_p <- function(sim_cors, obs_cor) {
   sum(abs(obs_cor) < abs(sim_cors)) / length(sim_cors)
 }
 
+## image functions
 softmax_images <- function(data, beta = 1) {
   data |> 
     mutate(across(starts_with("image"), \(i) exp(beta * i)),
@@ -29,7 +40,7 @@ softmax_images <- function(data, beta = 1) {
     select(-rowsum)
 }
 
-get_mean_kl <- function(human_probs_wide, model_probs_wide) {
+get_mean_kl_img <- function(human_probs_wide, model_probs_wide) {
   combined_distribs <- bind_rows(human_probs_wide, model_probs_wide) |> 
     mutate(across(starts_with("image"), \(i) replace_na(i, 0))) |> 
     nest(distribs = -trial) |> 
@@ -44,9 +55,48 @@ get_mean_kl <- function(human_probs_wide, model_probs_wide) {
     mean(na.rm = TRUE)
 }
 
+mean_kl_img <- \(beta) {get_mean_kl_img(human_probs_wide, 
+                                        softmax_images(model_logits_wide, beta))}
+
+## text functions
+softmax_texts <- function(data, beta = 1) {
+  data |> 
+    group_by(cue) |> 
+    mutate(model = exp(beta * model),
+           model_sum = sum(model),
+           model = model/model_sum) |> 
+    select(-model_sum)
+}
+
+get_mean_kl_txt <- function(combined_probs) {
+  combined_distribs <- combined_probs |> 
+    select(-target) |> 
+    nest(distribs = -cue) |> 
+    mutate(distribs = lapply(distribs, \(d) t(d)),
+           kl = sapply(distribs, \(d) {
+             d |> as.matrix() |> 
+               {\(m) quietly(KL)(m, unit = "log")["result"][[1]]}()
+           }))
+  combined_distribs |> 
+    pull(kl) |> 
+    mean(na.rm = TRUE)
+}
+
+## optimisation functions
 get_opt_kl <- function(human_probs_wide, model_logits_wide) {
-  mean_kl <- \(beta) {get_mean_kl(human_probs_wide, 
-                                  softmax_images(model_logits_wide, beta))}
+  mean_kl <- \(beta) {get_mean_kl_img(human_probs_wide, 
+                                      softmax_images(model_logits_wide, beta))}
+  res <- nloptr(x0 = 1, 
+                eval_f = mean_kl, 
+                lb = 0.025,
+                ub = 40,
+                opts = list(algorithm = "NLOPT_GN_DIRECT_L",
+                            ftol_abs = 1e-4,
+                            maxeval = 200))
+}
+
+get_opt_kl_txt <- function(combined_data) {
+  mean_kl <- \(beta) {get_mean_kl_txt(softmax_texts(combined_data, beta))}
   res <- nloptr(x0 = 1, 
                 eval_f = mean_kl, 
                 lb = 0.025,
