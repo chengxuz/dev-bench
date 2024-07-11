@@ -1,6 +1,9 @@
 library(tidyverse)
+library(glue)
+library(extrafont)
 library(philentropy)
 library(nloptr)
+loadfonts()
 
 model_rename <- c("blip" = "BLIP",
                   "bridgetower" = "BridgeTower",
@@ -10,6 +13,27 @@ model_rename <- c("blip" = "BLIP",
                   "flava" = "FLAVA",
                   "openclip/openclip_epoch_256" = "OpenCLIP",
                   "vilt" = "ViLT")
+model_feats <- read_csv("model_feat_vals.csv")
+size_fix <- c("K" = "e3",
+              "M" = "e6",
+              "B" = "e9")
+
+epoch_set <- c(seq(1, 10),
+               seq(12, 20, 2),
+               seq(25, 50, 5),
+               seq(60, 100, 10),
+               122, 140, 160, 180, 200, 256)
+
+oc_files <- glue("openclip_epoch_{epoch_set}.npy")
+
+theme_set(theme_classic() +
+            theme(text = element_text(family = "Source Sans Pro")))
+my_palette = c("#f0653e", "#f0cf3e", "#a6f03e", "#3ef0e1", "#3e7ff0", "#a63ef0", "#f03e94")
+
+assign("scale_colour_discrete", 
+       function(..., values = my_palette) scale_colour_manual(..., values = values), globalenv())
+assign("scale_fill_discrete", 
+       function(..., values = my_palette) scale_fill_manual(..., values = values), globalenv())
 
 ## RSA functions
 rsa <- function(mat1, mat2, method = "spearman") {
@@ -40,7 +64,7 @@ softmax_images <- function(data, beta = 1) {
     select(-rowsum)
 }
 
-get_mean_kl_img <- function(human_probs_wide, model_probs_wide) {
+get_mean_kl_img <- function(human_probs_wide, model_probs_wide, return_distribs = FALSE) {
   combined_distribs <- bind_rows(human_probs_wide, model_probs_wide) |> 
     mutate(across(starts_with("image"), \(i) replace_na(i, 0))) |> 
     nest(distribs = -trial) |> 
@@ -50,6 +74,7 @@ get_mean_kl_img <- function(human_probs_wide, model_probs_wide) {
         as.matrix() |> 
         {\(m) quietly(KL)(m, unit = "log")["result"][[1]]}()
     }))
+  if (return_distribs) return(combined_distribs)
   combined_distribs |> 
     pull(kl) |> 
     mean(na.rm = TRUE)

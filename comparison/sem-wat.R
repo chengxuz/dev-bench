@@ -1,12 +1,13 @@
 library(tidyverse)
 library(here)
+library(latex2exp)
 library(reticulate)
 library(psych)
 source("comparison/stats-helper.R")
 
 np <- import("numpy")
 oc_dir <- here("evals/sem-wat/openclip/")
-oc_files <- list.files(oc_dir)
+# oc_files <- list.files(oc_dir)
 
 ## make human data
 get_human_data_wat <- function() {
@@ -29,23 +30,23 @@ get_human_data_wat <- function() {
         age_group == "fifth" ~ 280)) |> 
     rename(target = response)
   
-  child_2 <- read_tsv(here("assets/sem-wat/TA_data_formatted.txt"),
-                      show_col_types = FALSE) |> 
-    count(Experimenter_Word, Child_Word, Age2) |> 
-    group_by(Experimenter_Word, Age2) |> 
-    mutate(count = n,
-           n = sum(n),
-           age = case_when(
-             Age2 == "Younger" ~ 4,
-             Age2 == "Older" ~ 7,
-             .default = 25)) |> 
-    filter(count != 1) |> 
-    rename(cue = Experimenter_Word,
-           target = Child_Word) |> 
-    ungroup()
+  # child_2 <- read_tsv(here("assets/sem-wat/TA_data_formatted.txt"),
+  #                     show_col_types = FALSE) |> 
+  #   count(Experimenter_Word, Child_Word, Age2) |> 
+  #   group_by(Experimenter_Word, Age2) |> 
+  #   mutate(count = n,
+  #          n = sum(n),
+  #          age = case_when(
+  #            Age2 == "Younger" ~ 4,
+  #            Age2 == "Older" ~ 7,
+  #            .default = 25)) |> 
+  #   filter(count != 1) |> 
+  #   rename(cue = Experimenter_Word,
+  #          target = Child_Word) |> 
+  #   ungroup()
   
-  child_union <- child_1 |> select(age, cue, target, count, n) |> 
-    bind_rows(child_2 |> select(age, cue, target, count, n))
+  child_union <- child_1 |> select(age, cue, target, count, n) # |> 
+    # bind_rows(child_2 |> select(age, cue, target, count, n))
   
   adult_loc <- here("assets/sem-wat/adult/")
   adult <- lapply(list.files(adult_loc), \(f) {
@@ -83,16 +84,28 @@ human_data_wat <- get_human_data_wat()
 
 ## comparison fxn
 compare_wat <- function(model_data, human_data) {
+  set.seed(42)
+  MAX_N = 20
+  
   all_text <- c(human_data$cue, human_data$target) |> unique()
   comparison <- human_data |> 
-    filter(prop_norm < 1) |> 
+    select(age, cue, target, human = prop) |> 
+    nest(data = -c(age, cue)) |> 
+    mutate(n_targets = sapply(data, nrow),
+           data = pmap(list(data, cue, n_targets), \(d, c, n) {
+             opts <- setdiff(all_text, c(c, d$target))
+             rand <- tibble(target = sample(opts, MAX_N - n),
+                            human = 0)
+             bind_rows(d, rand)
+           })) |> 
+    unnest(cols = data) |> 
     mutate(similarity = map2_dbl(cue, target, \(c, t) {
       embeds <- rbind(model_data[which(all_text == c),],
                       model_data[which(all_text == t),])
       philentropy::distance(embeds, method = "cosine",
                             mute.message = TRUE)
     })) |> 
-    select(age, cue, target, human = prop_norm, model = similarity) |> 
+    select(age, cue, target, human, model = similarity) |> 
     nest(data = -age) |> 
     mutate(opt_kl = lapply(data, \(d) {get_opt_kl_txt(d)}),
            kl = sapply(opt_kl, \(r) {r$objective}),
@@ -102,20 +115,23 @@ compare_wat <- function(model_data, human_data) {
 }
 
 ## comparisons for openclip
-openclip_div <- lapply(oc_files, \(ocf) {
+openclip_div_wat <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf))
   kls <- compare_wat(res, human_data_wat) |> 
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-wat_oc <- ggplot(openclip_div, aes(x = log(epoch), y = kl, col = as.factor(age))) +
+wat_oc <- ggplot(openclip_div_wat, aes(x = log(epoch), y = kl, col = as.factor(age))) +
   geom_point() +
   geom_smooth(span = 1) +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "log(Epoch)",
-       y = TeX("$D^*_{KL}$"),
-       col = "Age")
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"),
+       col = "Age") +
+  guides(colour = guide_legend(position = "inside")) +
+  # coord_cartesian(ylim = c(0, 0.06)) +
+  theme(legend.position.inside = c(0.9, 0.3))
 
 ggsave("comparison/sem-wat-oc.png", 
        wat_oc, 
@@ -124,20 +140,20 @@ ggsave("comparison/sem-wat-oc.png",
 ## comparisons for other models
 wat_files <- c(list.files("evals/sem-wat", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
-other_res <- lapply(wat_files, \(watf) {
+other_res_wat <- lapply(wat_files, \(watf) {
   res <- np$load(here("evals/sem-wat", watf))
   kls <- compare_wat(res, human_data_wat) |> 
     mutate(model = watf |> str_remove_all("wat_") |> str_remove_all(".npy"))
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
 
-wat_all <- ggplot(other_res |> filter(!is.na(kl)),
-                  aes(x = fct_reorder(model, desc(kl)), y = kl, col = as.factor(age))) + 
+wat_all <- ggplot(other_res_wat |> filter(!is.na(kl)),
+                  aes(x = fct_reorder(model, desc(kl)), y = kl, fill = as.factor(age))) + 
   geom_col(position = "dodge") + 
   # scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "Model",
-       y = "RSA similarity",
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"),
        fill = "Age") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -145,4 +161,14 @@ ggsave("comparison/sem-wat-all.png",
        wat_all, 
        width = 6.2, height = 4.2, units = "in")
 
+wat_devt <- other_res_wat |> 
+  group_by(model) |> 
+  summarise(cor = cor(age, kl, method = "spearman"))
 
+wat_feats <- other_res_wat |> 
+  left_join(model_feats, by = join_by(model == Model)) |> 
+  mutate(n_params = str_replace_all(`# params`, size_fix) |> as.numeric(),
+         n_images = str_replace_all(`# images`, size_fix) |> as.numeric()) |> 
+  group_by(age) |> 
+  summarise(size = cor(kl, log(n_params)),
+            training = cor(kl, log(n_images)))

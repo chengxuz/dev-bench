@@ -8,7 +8,7 @@ source("comparison/stats-helper.R")
 
 np <- import("numpy")
 oc_dir <- here("evals/lex-viz_vocab/openclip/")
-oc_files <- list.files(oc_dir)
+# oc_files <- list.files(oc_dir)
 
 ## make human data
 get_human_data_vv <- function(manifest_file = "assets/lex-viz_vocab/manifest.csv", 
@@ -65,7 +65,7 @@ compare_vv <- function(model_data, human_data) {
 # }
 
 ## comparisons for openclip
-openclip_div <- lapply(oc_files, \(ocf) {
+openclip_div_vv <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf)) |> 
     as_tibble() |> 
@@ -115,14 +115,17 @@ openclip_div <- lapply(oc_files, \(ocf) {
 #     mutate(epoch = epoch)
 # }) |> bind_rows()
 
-vv_oc <- ggplot(openclip_div, aes(x = log(epoch), y = kl, col = as.factor(age_bin))) +
+vv_oc <- ggplot(openclip_div_vv, 
+                aes(x = log(epoch), y = kl, col = as.factor(age_bin))) +
   geom_point() +
   geom_smooth(span = 1) +#, method = "lm") +
   # scale_colour_continuous() +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "log(Epoch)",
-       y = TeX("$D^*_{KL}$"),
-       col = "Age")
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"),
+       col = "Age") +
+  guides(colour = guide_legend(position = "inside")) +
+  theme(legend.position.inside = c(0.9, 0.8))
 
 ggsave("comparison/lex-vv-oc.png", 
        vv_oc, 
@@ -134,7 +137,7 @@ ggsave("comparison/lex-vv-oc.png",
 ## comparisons for other models
 vv_files <- c(list.files("evals/lex-viz_vocab", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
-other_res <- lapply(vv_files, \(vvf) {
+other_res_vv <- lapply(vv_files, \(vvf) {
   res <- np$load(here("evals/lex-viz_vocab", vvf)) |> 
     as_tibble()
   res <- res |> 
@@ -150,17 +153,65 @@ other_res <- lapply(vv_files, \(vvf) {
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
 
-vv_all <- ggplot(other_res, 
-       aes(x = accuracy, y = kl, col = as.factor(age_bin), shape = model)) + 
+vv_all <- ggplot(other_res_vv |> mutate(age_bin = as.factor(age_bin) |> fct_recode(A = "25")), 
+                 aes(x = accuracy, y = kl, col = age_bin, shape = model)) + 
   geom_point() + 
-  scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
-  theme_classic() +
+  geom_line(aes(group = as.factor(age_bin)), 
+            method = "lm", stat = "smooth", alpha = .7) + 
+  scale_shape_manual(values = c(16, 1, 17, 15, 3, 0, 18, 2)) +
+  # theme_classic() +
   labs(x = "Accuracy",
-       y = TeX("$D^*_{KL}$"),
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"),
        shape = "Model",
-       col = "Age")
+       col = "Age") +
+  guides(colour = guide_legend(position = "inside")) +
+  theme(legend.position.inside = c(0.9, 0.72))
 
 ggsave("comparison/lex-vv-all.png", 
        vv_all, 
-       width = 6.2, height = 4.2, units = "in")
+       #width = 6.2, height = 4.2, units = "in")
+       width = 1400, height = 800, units = "px")
 
+library(lmerTest)
+library(broom.mixed)
+vv_mod <- lmer(kl ~ accuracy * age_bin + (1 | model),
+               data = other_res_vv)
+
+vv_devt <- other_res_vv |> 
+  group_by(model) |> 
+  summarise(cor = cor(age_bin, kl, method = "spearman"))
+
+vv_feats <- other_res_vv |> 
+  left_join(model_feats, by = join_by(model == Model)) |> 
+  mutate(n_params = str_replace_all(`# params`, size_fix) |> as.numeric(),
+         n_images = str_replace_all(`# images`, size_fix) |> as.numeric()) |> 
+  group_by(age_bin) |> 
+  summarise(accuracy = cor(kl, accuracy),
+            size = cor(kl, log(n_params)),
+            training = cor(kl, log(n_images)))
+
+## item-level comparisons
+item_res_vv <- lapply(vv_files, \(vvf) {
+  res <- np$load(here("evals/lex-viz_vocab", vvf)) |> 
+    as_tibble()
+  res <- res |> 
+    `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
+    mutate(trial = seq_along(image1))
+  model_name = vvf |> str_remove_all("vizvocab_") |> str_remove_all(".npy") |> 
+    str_replace_all(model_rename)
+  human_data_nested <- human_data_vv |> 
+    select(age_bin, trial, starts_with("image")) |> 
+    nest(data = -age_bin) |> 
+    left_join(other_res_vv |> filter(model == model_name) |> select(age_bin, beta), by = join_by(age_bin)) |> 
+    mutate(model = model_name,
+           data = map2(data, beta, \(d, b) {
+      get_mean_kl_img(d, softmax_images(res, b), return_distribs = TRUE) |> 
+        select(-distribs) |> 
+        mutate(kl_z = scale(kl)[,1])
+      })) |> 
+    unnest(data)
+}) |> bind_rows()
+
+item_dif_vv <- item_res_vv |> 
+  group_by(trial) |> 
+  summarise(kl_z = mean(kl_z))

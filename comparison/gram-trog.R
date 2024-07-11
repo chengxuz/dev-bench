@@ -8,7 +8,7 @@ source("comparison/stats-helper.R")
 
 np <- import("numpy")
 oc_dir <- here("evals/gram-trog/openclip/")
-oc_files <- list.files(oc_dir)
+# oc_files <- list.files(oc_dir)
 
 ## make human data
 get_human_data_trog <- function(manifest_file = "assets/gram-trog/manifest.csv",
@@ -48,7 +48,7 @@ compare_trog <- function(model_data, human_data) {
 }
 
 ## comparisons for openclip
-openclip_div <- lapply(oc_files, \(ocf) {
+openclip_div_trog <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf)) |> 
     as_tibble() |> 
@@ -58,13 +58,13 @@ openclip_div <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-trog_oc <- ggplot(openclip_div, aes(x = log(epoch), y = kl)) +
+trog_oc <- ggplot(openclip_div_trog, aes(x = log(epoch), y = kl)) +
   geom_point() +
-  geom_smooth(span = 1) +#, method = "lm") +
+  geom_smooth(col = my_palette[5], span = 1) +#, method = "lm") +
   scale_colour_continuous() +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "log(Epoch)",
-       y = TeX("$D^*_{KL}$"))
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"))
 
 ggsave("comparison/gram-trog-oc.png", 
        trog_oc, 
@@ -73,7 +73,7 @@ ggsave("comparison/gram-trog-oc.png",
 ## comparisons for other models
 trog_files <- c(list.files("evals/gram-trog", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
-other_res <- lapply(trog_files, \(trogf) {
+other_res_trog <- lapply(trog_files, \(trogf) {
   res <- np$load(here("evals/gram-trog", trogf)) |> 
     as_tibble()
   res <- res |> 
@@ -89,15 +89,45 @@ other_res <- lapply(trog_files, \(trogf) {
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
 
-trog_all <- ggplot(other_res, 
-       aes(x = accuracy, y = kl, shape = model)) + 
+trog_all <- ggplot(other_res_trog, 
+                   aes(x = accuracy, y = kl, shape = model)) + 
   geom_point() + 
   scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "Accuracy",
-       y = TeX("$D^*_{KL}$"),
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"),
        shape = "Model")
 
 ggsave("comparison/gram-trog-all.png", 
        trog_all, 
        width = 6.2, height = 4.2, units = "in")
+
+trog_feats <- other_res_trog |> 
+  left_join(model_feats, by = join_by(model == Model)) |> 
+  mutate(n_params = str_replace_all(`# params`, size_fix) |> as.numeric(),
+         n_images = str_replace_all(`# images`, size_fix) |> as.numeric()) |> 
+  summarise(accuracy = cor(kl, accuracy),
+            size = cor(kl, log(n_params)),
+            training = cor(kl, log(n_images)))
+
+## item-level comparisons
+item_res_trog <- lapply(trog_files, \(trogf) {
+  res <- np$load(here("evals/gram-trog", trogf)) |> 
+    as_tibble()
+  res <- res |> 
+    `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
+    mutate(trial = seq_along(image1))
+  model_name = wgf |> str_remove_all("winoground_") |> str_remove_all(".npy") |> 
+    str_replace_all(model_rename)
+  beta = other_res_wg |> filter(model == model_name) |> pull(beta)
+  human_data_nested <- human_data_trog |> 
+    select(trial, starts_with("image"))
+  kl <- get_mean_kl_img(human_data_nested, softmax_images(res, beta), return_distribs = TRUE) |> 
+    select(-distribs) |> 
+    mutate(kl_z = scale(kl)[,1]) |> 
+    mutate(model = model_name)
+}) |> bind_rows()
+
+item_dif_trog <- item_res_trog |> 
+  group_by(trial) |> 
+  summarise(kl_z = mean(kl_z))

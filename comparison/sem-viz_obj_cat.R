@@ -1,13 +1,14 @@
 library(tidyverse)
 library(here)
 library(R.matlab)
+library(latex2exp)
 library(reticulate)
 library(psych)
 source("comparison/stats-helper.R")
 
 np <- import("numpy")
 oc_dir <- here("evals/sem-viz_obj_cat/openclip/")
-oc_files <- list.files(oc_dir)
+# oc_files <- list.files(oc_dir)
 # clip <- np$load(here("evals/sem-viz_obj_cat/clip.npy"))
 
 ## make human_data
@@ -57,7 +58,7 @@ reduce_mat <- function(mat) {
 }
 
 ## comparisons for openclip
-openclip_cors <- lapply(oc_files, \(ocf) {
+openclip_cors_voc <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf))
   res_mat <- philentropy::distance(res, method = "cosine",
@@ -71,14 +72,17 @@ openclip_cors <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-voc_oc <- ggplot(openclip_cors, aes(x = log(epoch), y = similarity, col = as.factor(age))) +
+voc_oc <- ggplot(openclip_cors_voc, aes(x = log(epoch), y = similarity, col = as.factor(age))) +
   geom_point() +
   geom_smooth(span = 1) +#, method = "lm") +
   # scale_colour_continuous() +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "log(Epoch)",
-       y = "RSA similarity",
-       col = "Age")
+       y = "RSA similarity (r)",
+       col = "Age") +
+  guides(colour = guide_legend(position = "inside")) +
+  # coord_cartesian(ylim = c(0, 0.06)) +
+  theme(legend.position.inside = c(0.9, 0.8))
 
 ggsave("comparison/sem-voc-oc.png", 
        voc_oc, 
@@ -87,7 +91,7 @@ ggsave("comparison/sem-voc-oc.png",
 ## comparisons for other models
 voc_files <- c(list.files("evals/sem-viz_obj_cat", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
-other_res <- lapply(voc_files, \(vocf) {
+other_res_voc <- lapply(voc_files, \(vocf) {
   res <- np$load(here("evals/sem-viz_obj_cat", vocf))
   res_mat <- philentropy::distance(res, method = "cosine",
                                    mute.message = TRUE) |> 
@@ -101,17 +105,29 @@ other_res <- lapply(voc_files, \(vocf) {
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
 
-voc_all <- ggplot(other_res |> filter(!is.na(similarity)),
+voc_all <- ggplot(other_res_voc |> filter(!is.na(similarity)),
                   aes(x = fct_reorder(model, similarity), y = similarity, fill = as.factor(age))) + 
   geom_col(position = "dodge") + 
   # scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "Model",
-       y = "RSA similarity",
+       y = "RSA similarity (r)",
        fill = "Age") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ggsave("comparison/sem-voc-all.png", 
        voc_all, 
        width = 6.2, height = 4.2, units = "in")
+
+voc_devt <- other_res_voc |> 
+  group_by(model) |> 
+  summarise(cor = cor(age, similarity, method = "spearman"))
+
+voc_feats <- other_res_voc |> 
+  left_join(model_feats, by = join_by(model == Model)) |> 
+  mutate(n_params = str_replace_all(`# params`, size_fix) |> as.numeric(),
+         n_images = str_replace_all(`# images`, size_fix) |> as.numeric()) |> 
+  group_by(age) |> 
+  summarise(size = cor(similarity, log(n_params)),
+            training = cor(similarity, log(n_images)))
 

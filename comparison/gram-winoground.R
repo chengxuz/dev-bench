@@ -7,7 +7,7 @@ source("comparison/stats-helper.R")
 
 np <- import("numpy")
 oc_dir <- here("evals/gram-winoground/openclip/")
-oc_files <- list.files(oc_dir)
+# oc_files <- list.files(oc_dir)
 
 ## make human data
 get_human_data_wg <- function(manifest_file = "assets/gram-winoground/manifest.csv",
@@ -62,7 +62,7 @@ compare_wg <- function(model_data, human_data) {
 }
 
 ## comparisons for openclip
-openclip_cors <- lapply(oc_files, \(ocf) {
+openclip_div_wg <- lapply(oc_files, \(ocf) {
   epoch <- str_match(ocf, "[0-9]+")[1] |> as.numeric()
   res <- np$load(here(oc_dir, ocf)) |> 
     as_tibble() |> 
@@ -72,13 +72,13 @@ openclip_cors <- lapply(oc_files, \(ocf) {
     mutate(epoch = epoch)
 }) |> bind_rows()
 
-wg_oc <- ggplot(openclip_cors, aes(x = log(epoch), y = kl)) +
+wg_oc <- ggplot(openclip_div_wg, aes(x = log(epoch), y = kl)) +
   geom_point() +
-  geom_smooth() +
+  geom_smooth(col = my_palette[5]) +
   scale_colour_continuous() +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "log(Epoch)",
-       y = TeX("$D^*_{KL}$"))
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"))
 
 ggsave("comparison/gram-wg-oc.png", 
        wg_oc, 
@@ -90,7 +90,7 @@ ggsave("comparison/gram-wg-oc.png",
 ## comparisons for other models
 wg_files <- c(list.files("evals/gram-winoground", pattern = "*.npy"), "openclip/openclip_epoch_256.npy")
 
-other_res <- lapply(wg_files, \(wgf) {
+other_res_wg <- lapply(wg_files, \(wgf) {
   res <- np$load(here("evals/gram-winoground", wgf)) |> 
     as_tibble()
   res <- res |> 
@@ -106,15 +106,63 @@ other_res <- lapply(wg_files, \(wgf) {
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
 
-wg_all <- ggplot(other_res, 
-       aes(x = accuracy, y = kl, shape = model)) + 
+wg_all <- ggplot(other_res_wg, 
+                 aes(x = accuracy, y = kl, shape = model)) + 
   geom_point() + 
   scale_shape_manual(values = c(16, 1, 17, 15, 18, 0, 2, 3)) +
-  theme_classic() +
+  # theme_classic() +
   labs(x = "Accuracy",
-       y = TeX("$D^*_{KL}$"),
+       y = TeX("Model–human dissimilarity ($D^*_{KL}$)"),
        shape = "Model")
 
 ggsave("comparison/gram-wg-all.png", 
        wg_all, 
        width = 6.2, height = 4.2, units = "in")
+
+wg_feats <- other_res_wg |> 
+  left_join(model_feats, by = join_by(model == Model)) |> 
+  mutate(n_params = str_replace_all(`# params`, size_fix) |> as.numeric(),
+         n_images = str_replace_all(`# images`, size_fix) |> as.numeric()) |> 
+  summarise(accuracy = cor(kl, accuracy),
+            size = cor(kl, log(n_params)),
+            training = cor(kl, log(n_images)))
+
+## item-level comparisons
+item_res_wg <- lapply(wg_files, \(wgf) {
+  res <- np$load(here("evals/gram-winoground", wgf)) |> 
+    as_tibble()
+  res <- res |> 
+    `colnames<-`(value = c("image1text1", "image2text1", "image1text2", "image2text2")) |> 
+    mutate(trial = seq_along(image1text1)) |> 
+    pivot_longer(cols = starts_with("image"),
+                 names_to = c("image", "text"),
+                 names_pattern = "(image[12])(text[12])",
+                 values_to = "score") |> 
+    pivot_wider(names_from = image,
+                values_from = score) |> 
+    mutate(trial = glue("{trial}_{text}"))
+  model_name = wgf |> str_remove_all("winoground_") |> str_remove_all(".npy") |> 
+    str_replace_all(model_rename)
+  beta = other_res_wg |> filter(model == model_name) |> pull(beta)
+  human_data_nested <- human_data_wg |> 
+    separate_wider_regex(cols = pair,
+                         patterns = c(image = "(?:image[12])", 
+                                      text = "(?:text[12])")) |> 
+    pivot_wider(names_from = image,
+                values_from = score) |> 
+    mutate(rowsum = rowSums(across(starts_with("image"))),
+           across(starts_with("image"), \(x) x / rowsum),
+           trial = glue("{trial}_{text}")) |> 
+    select(-rowsum) |> 
+    select(trial, starts_with("image"))
+  kl <- get_mean_kl_img(human_data_nested, softmax_images(res, beta), return_distribs = TRUE) |> 
+    # select(-distribs) |> 
+    mutate(kl_z = scale(kl)[,1]) |> 
+    mutate(model = model_name)
+}) |> bind_rows()
+
+item_dif_wg <- item_res_wg |> 
+  separate_wider_delim(trial, delim = "_", names = c("trial", "text")) |> 
+  group_by(trial) |> 
+  summarise(kl_z = mean(kl_z))
+  
