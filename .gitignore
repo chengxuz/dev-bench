@@ -162,7 +162,7 @@ cython_debug/
 .DS_Store
 .vscode
 
-assets/
+assets/*/*.png
 */original/
 gram-winoground/winoground
 
