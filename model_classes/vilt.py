@@ -1,4 +1,5 @@
 from eval_model import EvalModel
+from tqdm import tqdm
 import torch
 import numpy as np
 
@@ -16,7 +17,7 @@ class ViltEvalModel(EvalModel):
         """
         all_sims = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Prepare inputs with padding and truncation
                 # Assuming each data point in the dataloader has multiple images and texts
                 num_images = len(d["images"])

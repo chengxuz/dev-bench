@@ -1,4 +1,5 @@
 from eval_model import EvalModel
+from tqdm import tqdm
 import torch
 import numpy as np
 
@@ -18,7 +19,7 @@ class CvclEvalModel(EvalModel):
         all_feats = []
         self.model.eval()
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Process the images with the processor
                 images = [self.processor(img.convert("RGB")) for img in d["images"]]
                 images = torch.stack(images).to(self.device)
@@ -48,7 +49,7 @@ class CvclEvalModel(EvalModel):
         """
         all_sims = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Process images
                 images = [self.processor(img) for img in d["images"]]
                 images = torch.stack(images).to(self.device)

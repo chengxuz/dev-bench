@@ -16,8 +16,8 @@ class BlipEvalModel(EvalModel):
     def get_all_text_feats(self, data_loader):
         all_text_feats = []
         
-        for batch in tqdm(data_loader, desc="Extracting text features"):
-            text_features = self.model(batch["text"])
+        for d in tqdm(data_loader, desc="Processing data"):
+            text_features = self.model(d["text"])
             all_text_feats.append(text_features)
         
         all_text_feats = torch.cat(all_text_feats, dim=0)

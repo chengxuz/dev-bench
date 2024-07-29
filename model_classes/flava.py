@@ -1,4 +1,5 @@
 from eval_model import EvalModel
+from tqdm import tqdm
 import torch
 import numpy as np
 
@@ -27,7 +28,7 @@ class FlavaEvalModel(EvalModel):
         """
         all_feats = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 images_rgb = [image.convert("RGB") for image in d["images"]]
                 image_input = self.feature_extractor(images_rgb, return_tensors="pt")
                 feats = self.image_model.get_image_features(**image_input).detach().numpy()
@@ -49,7 +50,7 @@ class FlavaEvalModel(EvalModel):
         """
         all_feats = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 inputs = self.processor(text=d["text"], return_tensors="pt", padding=True)
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 outputs = self.model(**inputs)
@@ -60,7 +61,7 @@ class FlavaEvalModel(EvalModel):
     def get_all_sim_scores(self, dataloader):
         all_sims = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Assume that processor and model can handle batches
                 images_rgb = [image.convert("RGB") for image in d["images"]]
                 inputs = self.processor(text=d["text"], images=images_rgb, 

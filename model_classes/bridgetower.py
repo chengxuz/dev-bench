@@ -1,4 +1,5 @@
 from eval_model import EvalModel
+from tqdm import tqdm
 import torch
 import numpy as np
 from PIL import Image
@@ -18,7 +19,7 @@ class BridgetowerEvalModel(EvalModel):
         """
         all_feats = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Process each image individually
                 for image in d["images"]:
                     # Convert image to RGB if not already in that format
@@ -64,7 +65,7 @@ class BridgetowerEvalModel(EvalModel):
 
         all_feats = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Use a blank image for each text input
                 inputs = self.processor(images=blank_image, text=d["text"], 
                                         return_tensors="pt", padding=True, 
@@ -88,7 +89,7 @@ class BridgetowerEvalModel(EvalModel):
         """
         all_sims = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 # Prepare inputs with padding and truncation
                 # Assuming each data point in the dataloader has multiple images and texts
                 num_images = len(d["images"])

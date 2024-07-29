@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 class EvalModel():
-    def __init__(self, model, processor=None, device="cuda"):
+    def __init__(self, model, processor=None, device="cpu"):
         self.device = device
         self.model = model.to(device)
         self.processor = processor
@@ -26,7 +26,7 @@ class EvalModel():
         """
         all_feats = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 inputs = self.processor(images=d["images"], return_tensors="pt").to(self.device)
                 feats = self.get_image_features(**inputs).detach().numpy()
                 all_feats.append(feats)
@@ -46,7 +46,7 @@ class EvalModel():
         """
         all_feats = []
         with torch.no_grad():
-            for d in dataloader:
+            for d in tqdm(dataloader, desc="Processing data"):
                 inputs = self.processor(text=d["text"], return_tensors="pt", 
                                 padding=True).to(self.device)
                 feats = self.get_text_features(**inputs).detach().numpy()
@@ -69,8 +69,9 @@ class EvalModel():
         all_sims = []
         with torch.no_grad():
             for d in tqdm(dataloader, desc="Processing data"):
-                images_tensor = torch.stack(d["images"]).to(self.device)
-                inputs = self.processor(images=images_tensor, text=d["text"], 
+		# inputs = self.processor(images=d["images"], return_tensors="pt").to(self.device)
+                # images_tensor = torch.stack(d["images"]).to(self.device)
+                inputs = self.processor(images=d["images"], text=d["text"], 
                                         return_tensors="pt", padding=True)
                 sims = self.get_similarity_scores(**inputs).detach().numpy()
                 all_sims.append(sims)
