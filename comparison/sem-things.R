@@ -14,7 +14,7 @@ oc_dir <- here("evals/sem-things/openclip/")
 # clip <- np$load(here("evals/sem-things/things_clip_small.npy"))
 
 ## make human_data
-human_data_things <- readMat(here("assets/sem-things/spose_similarity.mat"))$spose.sim
+human_data_things <- readMat(here("evals/sem-things/spose_similarity.mat"))$spose.sim
 
 # clip_things_cor <- rsa(mat_things, clip)
 # clip_things_perms <- get_permutations(mat_things, clip)
