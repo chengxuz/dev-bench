@@ -17,11 +17,21 @@ collapse_matrix <- function(mat) {
   apply(mat, c(1,2), mean, na.rm = TRUE)
 }
 
-human_data_voc <- tibble(age = c(0.333, 0.833, 1.583),
-                         mat = list(readMat(here("assets/sem-viz_obj_cat/original/Matrices/4months.mat"))$Matwindow[1][[1]],
-                                    readMat(here("assets/sem-viz_obj_cat/original/Matrices/10months.mat"))$Matwindow[1][[1]],
-                                    readMat(here("assets/sem-viz_obj_cat/original/Matrices/19months.mat"))$Matwindow[1][[1]]) |> 
-                           lapply(collapse_matrix))
+get_human_data_voc <- function(data_loc = "assets/sem-viz_obj_cat/original/Matrices/",
+                               use_cached = TRUE,
+                               cached_file = "evals/sem-viz_obj_cat/human.rds") {
+  if (use_cached && file.exists(cached_file)) return(readRDS(cached_file))
+  
+  human_data_voc <- tibble(age = c(0.333, 0.833, 1.583),
+                           mat = list(readMat(here("assets/sem-viz_obj_cat/original/Matrices/4months.mat"))$Matwindow[1][[1]],
+                                      readMat(here("assets/sem-viz_obj_cat/original/Matrices/10months.mat"))$Matwindow[1][[1]],
+                                      readMat(here("assets/sem-viz_obj_cat/original/Matrices/19months.mat"))$Matwindow[1][[1]]) |> 
+                             lapply(collapse_matrix))
+  
+  saveRDS(human_data_voc, cached_file)
+}
+
+human_data_voc <- get_human_data_voc
 
 # clip_4mo_cor <- rsa(mat_4mo_mean, clip)
 # clip_10mo_cor <- rsa(mat_10mo_mean, clip)

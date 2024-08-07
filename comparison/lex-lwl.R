@@ -11,7 +11,12 @@ oc_dir <- here("evals/lex-lwl/openclip/")
 # oc_files <- list.files(oc_dir)
 
 ## make human data
-get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest_new.csv") {
+get_human_data_lwl <- function(
+    manifest_file = "assets/lex-lwl/manifest.csv",
+    use_cached = TRUE,
+    cache_file = "evals/lex-lwl/human.csv") {
+  if (use_cached && file.exists(cache_file)) return(read_csv(cache_file))
+  
   manifest <- read_csv(manifest_file) |> 
     mutate(trial = seq_along(text1))
   
@@ -42,7 +47,8 @@ get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest_new.csv"
            age_bin = 1.5) |> 
     group_by(age_bin, target_image) |> 
     summarise(prop = mean(prop)) |> 
-    mutate(image1 = glue("images_adams/{target_image}.png")) |> 
+    mutate(image1 = glue("images_adams/{target_image}.png") |> 
+             str_replace("birdie", "birdy")) |> 
     select(-target_image)
   
   ## get Frank data
@@ -80,28 +86,9 @@ get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest_new.csv"
     mutate(image1 = str_replace(image1, "doggy", "doggie")) |> 
     left_join(manifest |> select(trial, image1)) |> 
     select(-image1)
+  
+  write_csv(all_data, cache_file)
 }
-
-# get_human_data_lwl <- function(manifest_file = "assets/lex-lwl/manifest.csv",
-#                                data_file = "evals/lex-lwl/experiment_info/eye.tracking.csv") {
-#   novel_words <- c("wug", "dax", "dofa", "fep", "pifo", "kreeb", "modi", "toma")
-#   manifest <- read_csv(manifest_file) |>
-#     mutate(trial = seq_along(text1)) |>
-#     filter(!text1 %in% novel_words,
-#            !text2 %in% novel_words) |>
-#     select(trial, text1, text2) |>
-#     pivot_longer(cols = c(text1, text2), names_to = "options", values_to = "word") |>
-#     mutate(trial = glue("{trial}_{options}")) |>
-#     select(trial, word, options)
-#   human_data <- read_csv(data_file) |>
-#     filter(word.type == "Familiar-Familiar") |>
-#     group_by(age.grp, word) |>
-#     summarise(mean_prop = mean(prop),
-#               n = n()) |>
-#     left_join(manifest, by = join_by(word)) |>
-#     mutate(image1 = ifelse(options == "text1", mean_prop, 1-mean_prop),
-#            image2 = ifelse(options == "text2", mean_prop, 1-mean_prop))
-# }
 
 human_data_lwl <- get_human_data_lwl()
 
