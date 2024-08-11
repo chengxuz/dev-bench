@@ -59,13 +59,40 @@ class ViltEvalModel(EvalModel):
     def get_all_text_feats(self, dataloader):
         embeddings = []
         blank_image = Image.new('RGB', (224, 224), (128, 128, 128))
-        for data in dataloader:
-            texts = data['text']  
-            for text in texts:
-                encoding = self.vilt_base_processor(images=[blank_image], text=[text], return_tensors="pt", padding=True, truncation=True)
+
+        with torch.no_grad():
+            for data in tqdm(dataloader, desc="Processing data"):
+                texts = data['text']  
+                encoding = self.vilt_base_processor(
+                    images=[blank_image] * len(texts),  
+                    text=texts,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True
+                )
+                encoding = {k: v.to(self.device) for k, v in encoding.items()}
                 outputs = self.vilt_base_model(**encoding).pooler_output
-                embeddings.append(outputs)
+                embeddings.extend(outputs.cpu())
         return embeddings
     
+
     def get_all_image_feats(self, dataloader):
-        return 
+        all_feats = []
+        with torch.no_grad():
+            for data in tqdm(dataloader, desc="Processing images"):
+                images_rgb = [image.convert("RGB") for image in data["images"]]
+                dummy_texts = [" "] * len(images_rgb)
+                encoding = self.vilt_base_processor(
+                    images=images_rgb,
+                    text=dummy_texts,  # Ensure text input matches image batch size
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True
+                )
+                encoding = {k: v.to(self.device) for k, v in encoding.items()}
+                outputs = self.vilt_base_model(**encoding).last_hidden_state
+                mean_feats = outputs.mean(dim=1).cpu().numpy()
+
+                all_feats.append(mean_feats)
+
+        return np.concatenate(all_feats, axis=0)
