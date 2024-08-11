@@ -2,8 +2,19 @@ from eval_model import EvalModel
 from tqdm import tqdm
 import torch
 import numpy as np
+from PIL import Image
 
 class ViltEvalModel(EvalModel):
+    def __init__(self, model, processor=None, vilt_base_model=None, vilt_base_processor=None, device="cpu"):
+        self.device = device
+        self.model = model.to(device)
+        self.processor = processor
+        self.vilt_base_model = vilt_base_model
+        self.vilt_base_processor = vilt_base_processor
+        self.get_image_features = self.get_all_image_feats
+        self.get_text_features = self.get_all_text_feats
+        self.get_similarity_scores = self.get_all_sim_scores
+
     def get_all_sim_scores(self, dataloader):
         """
         Gets image--text similarity scores from a dataloader using Bridge Tower model
@@ -43,3 +54,18 @@ class ViltEvalModel(EvalModel):
                 all_sims.append(sims)
         
         return np.stack(all_sims, axis=0)
+    
+
+    def get_all_text_feats(self, dataloader):
+        embeddings = []
+        blank_image = Image.new('RGB', (224, 224), (128, 128, 128))
+        for data in dataloader:
+            texts = data['text']  
+            for text in texts:
+                encoding = self.vilt_base_processor(images=[blank_image], text=[text], return_tensors="pt", padding=True, truncation=True)
+                outputs = self.vilt_base_model(**encoding).pooler_output
+                embeddings.append(outputs)
+        return embeddings
+    
+    def get_all_image_feats(self, dataloader):
+        return 
