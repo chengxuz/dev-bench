@@ -4,6 +4,14 @@ import torch
 import numpy as np
 
 class CvclEvalModel(EvalModel):
+    def __init__(self, model, processor=None,  device="cpu"):
+        self.device = device
+        self.model = model.to(device)
+        self.processor = processor
+        self.get_image_features = self.get_all_image_feats
+        self.get_text_features = self.get_all_text_feats
+        self.get_similarity_scores = self.get_all_sim_scores
+    
     def get_all_image_feats(self, dataloader):
         """
         Gets image features from a dataloader
@@ -65,3 +73,18 @@ class CvclEvalModel(EvalModel):
                 sims = logits_per_image.detach().cpu().numpy()
                 all_sims.append(sims)
         return np.stack(all_sims, axis=0)
+    
+
+    def get_all_text_feats_cvcl(self, dataloader):
+        all_feats = []
+        self.model.eval()
+
+        with torch.no_grad():
+            for data in tqdm(dataloader, desc="Processing text"):
+                texts = data['text']  
+                texts, texts_len = self.model.tokenize(texts)
+                texts, texts_len = texts.to(self.device), texts_len.to(self.device)
+                text_features = self.model.encode_text(texts, texts_len)
+                all_feats.append(text_features.cpu())
+
+        return torch.cat(all_feats, dim=0)

@@ -5,6 +5,16 @@ import numpy as np
 from PIL import Image
 
 class BridgetowerEvalModel(EvalModel):
+    def __init__(self, model, image_model=None, image_processor = None, processor=None, device="cpu"):
+        self.device = device
+        self.model = model.to(device)
+        self.processor = processor
+        self.image_processor = image_processor
+        self.image_model = image_model
+        self.get_image_features = self.get_all_image_feats
+        self.get_text_features = self.get_all_text_feats
+        self.get_similarity_scores = self.get_all_sim_scores
+
     def get_all_image_feats(self, dataloader):
         """
         Gets image embeddings from a dataloader using a model that outputs embeddings.
@@ -27,11 +37,11 @@ class BridgetowerEvalModel(EvalModel):
                         image = image.convert('RGB')
                     
                     # Pass a blank text to satisfy model requirements
-                    inputs = self.processor(images=[image], text=[""], 
+                    inputs = self.image_processor(images=[image], text=[""], 
                                             return_tensors="pt", padding=True, truncation=True)
                     
                     # Model inference
-                    outputs = self.model(**inputs)
+                    outputs = self.image_model(**inputs)
                     
                     # Extract image features
                     image_features = outputs.image_features  # Shape: (batch_size, image_sequence_length, hidden_size)
@@ -76,7 +86,7 @@ class BridgetowerEvalModel(EvalModel):
                 all_feats.append(feats)
         return np.concatenate(all_feats, axis=0)
 
-    def get_all_sim_scores(dataloader, processor, model):
+    def get_all_sim_scores(self, dataloader):
         """
         Gets image--text similarity scores from a dataloader using Bridge Tower model
         -----
@@ -99,10 +109,10 @@ class BridgetowerEvalModel(EvalModel):
                 for i, image in enumerate(d["images"]):
                     for j, text in enumerate(d["text"]):
                         # Prepare inputs for each image-text pair
-                        inputs = processor(images=image, text=text, return_tensors="pt", 
+                        inputs = self.processor(images=image, text=text, return_tensors="pt", 
                                            padding=True, truncation=True)
                         # Forward pass
-                        outputs = model(**inputs)
+                        outputs = self.model(**inputs)
                         sims[i, j] = outputs.logits[0, 1].item()
 
                 # Append the similarity scores for this batch to all_sims

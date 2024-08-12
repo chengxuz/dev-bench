@@ -4,16 +4,16 @@ import torch
 import numpy as np
 
 class FlavaEvalModel(EvalModel):
-    def __init__(self, model, processor=None, image_model=None, feature_extractor=None, device="cuda"):
+    def __init__(self, model, processor=None, image_model=None, feature_extractor=None, device="cpu"):
         self.device = device
         self.model = model.to(device)
         self.processor = processor
         self.image_model = image_model
         self.feature_extractor = feature_extractor
 
-        self.get_image_features = self.model.get_image_features
-        self.get_text_features = self.model.get_text_features
-        self.get_similarity_scores = lambda **x: self.model(**x).logits_per_image
+        self.get_image_features = self.get_all_image_feats
+        self.get_text_features = self.get_all_text_feats
+        self.get_similarity_scores = self.get_all_sim_scores
 
     def get_all_image_feats(self, dataloader):
         """
@@ -52,23 +52,22 @@ class FlavaEvalModel(EvalModel):
         with torch.no_grad():
             for d in tqdm(dataloader, desc="Processing data"):
                 inputs = self.processor(text=d["text"], return_tensors="pt", padding=True)
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                outputs = self.model(**inputs)
-                feats = outputs.text_embeddings.detach().cpu().numpy()
-                all_feats.extend(feats)
+                text_features = self.image_model.get_text_features(**inputs)[:, 0].float()
+                all_feats.extend(text_features)
         return all_feats
     
+
     def get_all_sim_scores(self, dataloader):
         all_sims = []
         with torch.no_grad():
             for d in tqdm(dataloader, desc="Processing data"):
-                # Assume that processor and model can handle batches
                 images_rgb = [image.convert("RGB") for image in d["images"]]
-                inputs = self.processor(text=d["text"], images=images_rgb, 
+                texts = [d["text"][0]] * len(images_rgb)  
+                inputs = self.processor(text=texts, images=images_rgb, 
                                         return_tensors="pt", max_length=77, 
                                         padding=True, return_codebook_pixels=True, 
                                         return_image_mask=True)
                 outputs = self.model(**inputs)
-                scores = outputs.contrastive_logits_per_image.view(len(d["images"]), len(d["text"])).numpy()
+                scores = outputs.contrastive_logits_per_image[:, 0].view(-1, 1).numpy()
                 all_sims.append(scores)
         return np.array(all_sims)

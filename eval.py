@@ -50,20 +50,24 @@ elif model_type == "flava":
 
 elif model_type == "bridgetower":
     from model_classes.bridgetower import BridgetowerEvalModel
-    from transformers import BridgeTowerProcessor, BridgeTowerForImageAndTextRetrieval
+    from transformers import BridgeTowerProcessor, BridgeTowerForImageAndTextRetrieval, BridgeTowerModel
 
     eval_model = BridgetowerEvalModel(
         model = BridgeTowerForImageAndTextRetrieval.from_pretrained("BridgeTower/bridgetower-base-itm-mlm"),
-        processor = BridgeTowerProcessor.from_pretrained("BridgeTower/bridgetower-base-itm-mlm")
+        processor = BridgeTowerProcessor.from_pretrained("BridgeTower/bridgetower-base-itm-mlm"),
+        image_processor = BridgeTowerProcessor.from_pretrained("BridgeTower/bridgetower-base"),
+        image_model = BridgeTowerModel.from_pretrained("BridgeTower/bridgetower-base")
     )
 
 elif model_type == "vilt":
     from model_classes.vilt import ViltEvalModel
-    from transformers import ViltProcessor, ViltForImageAndTextRetrieval
+    from transformers import ViltProcessor, ViltForImageAndTextRetrieval, ViltModel
 
     eval_model = ViltEvalModel(
         model = ViltForImageAndTextRetrieval.from_pretrained("dandelin/vilt-b32-finetuned-coco"),
-        processor = ViltProcessor.from_pretrained("dandelin/vilt-b32-finetuned-coco")
+        processor = ViltProcessor.from_pretrained("dandelin/vilt-b32-finetuned-coco"),
+        vilt_base_processor = ViltProcessor.from_pretrained("dandelin/vilt-b32-mlm"),
+        vilt_base_model = ViltModel.from_pretrained("dandelin/vilt-b32-mlm")
     )
 
 elif model_type == "cvcl":
@@ -103,7 +107,7 @@ wg_dl = data_handling.make_dataloader(wg_ds)
 wg_sims = eval_model.get_all_sim_scores(wg_dl)
 np.save(f"evals/gram-winoground/wg_{model_type}.npy", wg_sims)
 
-# Semantic tasks
+#Semantic tasks
 voc_ds = data_handling.DevBenchDataset("assets/sem-viz_obj_cat/")
 voc_dl = data_handling.make_dataloader(voc_ds)
 voc_embeds = eval_model.get_all_image_feats(voc_dl)

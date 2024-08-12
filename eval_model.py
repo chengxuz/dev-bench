@@ -7,7 +7,6 @@ class EvalModel():
         self.device = device
         self.model = model.to(device)
         self.processor = processor
-
         self.get_image_features = self.model.get_image_features
         self.get_text_features = self.model.get_text_features
         self.get_similarity_scores = lambda **x: self.model(**x).logits_per_image
