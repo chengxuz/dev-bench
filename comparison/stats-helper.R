@@ -7,7 +7,7 @@ loadfonts()
 
 model_rename <- c("blip" = "BLIP",
                   "bridgetower" = "BridgeTower",
-                  "clip_small" = "CLIP-base",
+                  "clip_base" = "CLIP-base",
                   "clip_large" = "CLIP-large",
                   "cvcl" = "CVCL",
                   "flava" = "FLAVA",
