@@ -101,7 +101,7 @@ other_res_wg <- lapply(wg_files, \(wgf) {
     summarise(accuracy = mean(correct)) |> 
     pull(accuracy)
   kls <- compare_wg(res, human_data_wg) |> 
-    mutate(model = wgf |> str_remove_all("winoground_") |> str_remove_all(".npy"),
+    mutate(model = wgf |> str_remove_all("wg_") |> str_remove_all(".npy"),
            accuracy = acc)
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
@@ -141,7 +141,7 @@ item_res_wg <- lapply(wg_files, \(wgf) {
     pivot_wider(names_from = image,
                 values_from = score) |> 
     mutate(trial = glue("{trial}_{text}"))
-  model_name = wgf |> str_remove_all("winoground_") |> str_remove_all(".npy") |> 
+  model_name = wgf |> str_remove_all("wg_") |> str_remove_all(".npy") |> 
     str_replace_all(model_rename)
   beta = other_res_wg |> filter(model == model_name) |> pull(beta)
   human_data_nested <- human_data_wg |> 

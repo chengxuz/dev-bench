@@ -148,7 +148,7 @@ other_res_vv <- lapply(vv_files, \(vvf) {
     summarise(accuracy = mean(correct)) |> 
     pull(accuracy)
   kls <- compare_vv(res, human_data_vv) |> 
-    mutate(model = vvf |> str_remove_all("vizvocab_") |> str_remove_all(".npy"),
+    mutate(model = vvf |> str_remove_all("vv_") |> str_remove_all(".npy"),
            accuracy = acc)
 }) |> bind_rows() |> 
   mutate(model = str_replace_all(model, model_rename))
@@ -197,7 +197,7 @@ item_res_vv <- lapply(vv_files, \(vvf) {
   res <- res |> 
     `colnames<-`(value = c("image1", "image2", "image3", "image4")) |> 
     mutate(trial = seq_along(image1))
-  model_name = vvf |> str_remove_all("vizvocab_") |> str_remove_all(".npy") |> 
+  model_name = vvf |> str_remove_all("vv_") |> str_remove_all(".npy") |> 
     str_replace_all(model_rename)
   human_data_nested <- human_data_vv |> 
     select(age_bin, trial, starts_with("image")) |> 
