@@ -163,9 +163,16 @@ cython_debug/
 .vscode
 
 assets/*/*.png
+assets/*/*.jpg
+assets/*/*/*.png
+assets/*/*/*.jpg
 */original/
 gram-winoground/winoground
 
 .Rproj.user
 .Rhistory
 
+
+*.swp
+.DS_Store
+*~

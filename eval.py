@@ -120,17 +120,17 @@ print("getting all sim scores lwl")
 lwl_sims = eval_model.get_all_sim_scores(lwl_dl)
 np.save(f"evals/lex-lwl/lwl_{model_type}.npy", lwl_sims)
 
+if False:
+    vv_ds = data_handling.DevBenchDataset("assets/lex-viz_vocab/")
+    vv_dl = data_handling.make_dataloader(vv_ds)
+    vv_sims = eval_model.get_all_sim_scores(vv_dl)
+    np.save(f"evals/lex-viz_vocab/vv_{model_type}.npy", vv_sims)
 
-vv_ds = data_handling.DevBenchDataset("assets/lex-viz_vocab/")
-vv_dl = data_handling.make_dataloader(vv_ds)
-vv_sims = eval_model.get_all_sim_scores(vv_dl)
-np.save(f"evals/lex-viz_vocab/vv_{model_type}.npy", vv_sims)
-
-# Grammatical tasks
-trog_ds = data_handling.DevBenchDataset("assets/gram-trog/")
-trog_dl = data_handling.make_dataloader(trog_ds)
-trog_sims = eval_model.get_all_sim_scores(trog_dl)
-np.save(f"evals/gram-trog/trog_{model_type}.npy", trog_sims)
+    # Grammatical tasks
+    trog_ds = data_handling.DevBenchDataset("assets/gram-trog/")
+    trog_dl = data_handling.make_dataloader(trog_ds)
+    trog_sims = eval_model.get_all_sim_scores(trog_dl)
+    np.save(f"evals/gram-trog/trog_{model_type}.npy", trog_sims)
 
 wg_ds = data_handling.DevBenchDataset("assets/gram-winoground/")
 wg_dl = data_handling.make_dataloader(wg_ds)
@@ -143,10 +143,10 @@ np.save(f"evals/gram-winoground/wg_{model_type}.npy", wg_sims)
 # voc_embeds = eval_model.get_all_image_feats(voc_dl)
 # np.save(f"evals/sem-viz_obj_cat/voc_{model_type}.npy", voc_embeds)
 
-# things_ds = data_handling.DevBenchDataset("assets/sem-things/")
-# things_dl = data_handling.make_dataloader(things_ds)
-# things_embeds = eval_model.get_all_image_feats(things_dl)
-# np.save(f"evals/sem-things/things_{model_type}.npy", things_embeds)
+things_ds = data_handling.DevBenchDataset("assets/sem-things/")
+things_dl = data_handling.make_dataloader(things_ds)
+things_embeds = eval_model.get_all_image_feats(things_dl)
+np.save(f"evals/sem-things/things_{model_type}.npy", things_embeds)
 
 # wat_ds = data_handling.DevBenchDataset("assets/sem-wat/")
 # wat_dl = data_handling.make_dataloader(wat_ds)
