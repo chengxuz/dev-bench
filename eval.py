@@ -102,8 +102,16 @@ elif model_type == "llava":
     eval_model = LlavaEvalModel(processor = AutoProcessor.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"),
     model = AutoModelForPreTraining.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"))
 
+elif model_type == "tinyllava":
+    from transformers import AutoProcessor, AutoModelForPreTraining
+    from model_classes.tinyllava import TinyLlavaEvalModel
+    eval_model = TinyLlavaEvalModel(processor = AutoProcessor.from_pretrained("bczhou/tiny-llava-v1-hf"),
+model = AutoModelForPreTraining.from_pretrained("bczhou/tiny-llava-v1-hf"))
+
 else:
     raise Exception(f"No implementation found for model '{model_type}'")
+
+
 
 # Lexical tasks
 lwl_ds = data_handling.DevBenchDataset("assets/lex-lwl/")
@@ -130,17 +138,17 @@ wg_sims = eval_model.get_all_sim_scores(wg_dl)
 np.save(f"evals/gram-winoground/wg_{model_type}.npy", wg_sims)
 
 #Semantic tasks
-voc_ds = data_handling.DevBenchDataset("assets/sem-viz_obj_cat/")
-voc_dl = data_handling.make_dataloader(voc_ds)
-voc_embeds = eval_model.get_all_image_feats(voc_dl)
-np.save(f"evals/sem-viz_obj_cat/voc_{model_type}.npy", voc_embeds)
+# voc_ds = data_handling.DevBenchDataset("assets/sem-viz_obj_cat/")
+# voc_dl = data_handling.make_dataloader(voc_ds)
+# voc_embeds = eval_model.get_all_image_feats(voc_dl)
+# np.save(f"evals/sem-viz_obj_cat/voc_{model_type}.npy", voc_embeds)
 
-things_ds = data_handling.DevBenchDataset("assets/sem-things/")
-things_dl = data_handling.make_dataloader(things_ds)
-things_embeds = eval_model.get_all_image_feats(things_dl)
-np.save(f"evals/sem-things/things_{model_type}.npy", things_embeds)
+# things_ds = data_handling.DevBenchDataset("assets/sem-things/")
+# things_dl = data_handling.make_dataloader(things_ds)
+# things_embeds = eval_model.get_all_image_feats(things_dl)
+# np.save(f"evals/sem-things/things_{model_type}.npy", things_embeds)
 
-wat_ds = data_handling.DevBenchDataset("assets/sem-wat/")
-wat_dl = data_handling.make_dataloader(wat_ds)
-wat_embeds = eval_model.get_all_text_feats(wat_dl)
-np.save(f"evals/sem-wat/wat_{model_type}.npy", wat_embeds)
+# wat_ds = data_handling.DevBenchDataset("assets/sem-wat/")
+# wat_dl = data_handling.make_dataloader(wat_ds)
+# wat_embeds = eval_model.get_all_text_feats(wat_dl)
+# np.save(f"evals/sem-wat/wat_{model_type}.npy", wat_embeds)

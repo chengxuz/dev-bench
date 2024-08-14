@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
 
-class LlavaEvalModel(EvalModel):
+class TinyLlavaEvalModel(EvalModel):
     def __init__(self, model, processor=None, device="cpu"):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
