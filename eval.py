@@ -96,14 +96,22 @@ elif model_type == "siglip":
     )
     print("loaded siglip model")
 
+elif model_type == "llava":
+    from model_classes.llava import LlavaEvalModel
+    from transformers import AutoProcessor, AutoModelForPreTraining
+    eval_model = LlavaEvalModel(processor = AutoProcessor.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"),
+    model = AutoModelForPreTraining.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"))
+
 else:
     raise Exception(f"No implementation found for model '{model_type}'")
 
 # Lexical tasks
 lwl_ds = data_handling.DevBenchDataset("assets/lex-lwl/")
 lwl_dl = data_handling.make_dataloader(lwl_ds)
+print("getting all sim scores lwl")
 lwl_sims = eval_model.get_all_sim_scores(lwl_dl)
 np.save(f"evals/lex-lwl/lwl_{model_type}.npy", lwl_sims)
+
 
 vv_ds = data_handling.DevBenchDataset("assets/lex-viz_vocab/")
 vv_dl = data_handling.make_dataloader(vv_ds)
