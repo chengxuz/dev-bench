@@ -82,6 +82,20 @@ elif model_type == "cvcl":
         processor = preprocess
     )
 
+elif model_type == "siglip":
+    from model_classes.siglip import SiglipEvalModel
+    from transformers import AutoProcessor, AutoModel, AutoTokenizer
+    print("loading siglip model")
+
+    eval_model = SiglipEvalModel(
+        model = AutoModel.from_pretrained("google/siglip-so400m-patch14-384"),
+        processor = AutoProcessor.from_pretrained("google/siglip-so400m-patch14-384"),
+        model_embed = AutoModel.from_pretrained("google/siglip-base-patch16-224"),
+        tokenizer = AutoTokenizer.from_pretrained("google/siglip-base-patch16-224"),
+        processor_embed = AutoProcessor.from_pretrained("google/siglip-base-patch16-224")
+    )
+    print("loaded siglip model")
+
 else:
     raise Exception(f"No implementation found for model '{model_type}'")
 
