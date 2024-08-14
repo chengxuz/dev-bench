@@ -30,7 +30,7 @@ class TinyLlavaEvalModel(EvalModel):
                     image_tensor = image_tensor.to(self.device)
 
                     for text in d['text']:
-                        prompt = f"[INST] <image>\nCaption: {text}. Does the caption match the image? Answer either Yes or No. [/INST]"
+                        prompt = f"USER: <image>\nCaption: {text}. Does the caption match the image? Answer either Yes or No. \nASSISTANT:"
                         inputs = self.processor(text=prompt, images=image_tensor, return_tensors='pt').to(self.device)  # Ensure inputs are on GPU
 
                         logits = self.model(**inputs).logits.squeeze()
