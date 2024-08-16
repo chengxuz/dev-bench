@@ -30,27 +30,31 @@ def compare_lwl(model_data, human_data):
     })
     return result_df
 
-# comparisons for openclip
-oc_files = glob(LWL_DIR + "openclip/*.npy")
-oc_kls = []
-for ocf in oc_files:
-    res = np.load(ocf)
-    res = pd.DataFrame(res.squeeze(),
-                       columns = ["image1", "image2"])
-    res['trial'] = np.arange(res.shape[0])+1
-    res['correct'] = (res['image1'] > res['image2'])
-    acc = res['correct'].mean()
-    kls = compare_lwl(res, human_data_lwl)
-    kls['epoch'] = int(os.path.splitext(os.path.basename(ocf))[0].replace("openclip_epoch_", ""))
-    kls['accuracy'] = acc
-    oc_kls.append(kls)
-openclip_div_lwl = pd.concat(oc_kls).sort_values(["epoch", "age_bin"]).reset_index(drop=True)
-openclip_div_lwl.to_csv("comparison/lex-lwl_openclip.csv")
+if False:
+    # comparisons for openclip
+    oc_files = glob(LWL_DIR + "openclip/*.npy")
+    oc_kls = []
+    for ocf in oc_files:
+        res = np.load(ocf)
+        res = pd.DataFrame(res.squeeze(),
+                           columns = ["image1", "image2"])
+        res['trial'] = np.arange(res.shape[0])+1
+        res['correct'] = (res['image1'] > res['image2'])
+        acc = res['correct'].mean()
+        kls = compare_lwl(res, human_data_lwl)
+        kls['epoch'] = int(os.path.splitext(os.path.basename(ocf))[0].replace("openclip_epoch_", ""))
+        kls['accuracy'] = acc
+        oc_kls.append(kls)
+    openclip_div_lwl = pd.concat(oc_kls).sort_values(["epoch", "age_bin"]).reset_index(drop=True)
+    openclip_div_lwl.to_csv("comparison/lex-lwl_openclip.csv")
 
 # comparisons for other models
 lwl_files = glob(LWL_DIR + "*.npy") + [LWL_DIR + "openclip/openclip_epoch_256.npy"]
 all_kls = []
 for lwlf in lwl_files:
+    if not os.path.exists(lwlf):
+        continue
+    print(lwlf)
     res = np.load(lwlf)
     res = pd.DataFrame(res.squeeze(),
                        columns = ["image1", "image2"])
@@ -60,6 +64,7 @@ for lwlf in lwl_files:
     kls = compare_lwl(res, human_data_lwl)
     kls['model'] = os.path.splitext(os.path.basename(lwlf))[0].replace("lwl_", "").replace("_epoch_256", "")
     kls['accuracy'] = acc
+    print(kls)
     all_kls.append(kls)
 other_res_lwl = pd.concat(all_kls).sort_values(["model", "age_bin"]).reset_index(drop=True)
 other_res_lwl.to_csv("comparison/lex-lwl_models.csv")

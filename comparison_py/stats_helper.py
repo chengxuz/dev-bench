@@ -6,7 +6,7 @@ from scipy.stats import spearmanr, pearsonr
 # Softmax function to apply to the image columns
 def softmax_images(data, beta=1):
     image_columns = data.filter(like='image')
-    softmaxed_images = np.exp(beta * image_columns)
+    softmaxed_images = np.exp(beta * (image_columns - np.max(image_columns)))
     rowsum = softmaxed_images.sum(axis=1)
     softmaxed_images = softmaxed_images.div(rowsum, axis=0)
     

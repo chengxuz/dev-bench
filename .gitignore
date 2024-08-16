@@ -176,3 +176,4 @@ gram-winoground/winoground
 *.swp
 .DS_Store
 *~
+assets/gram-winoground/human.jsonl

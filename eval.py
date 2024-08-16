@@ -99,14 +99,30 @@ elif model_type == "siglip":
 elif model_type == "llava":
     from model_classes.llava import LlavaEvalModel
     from transformers import AutoProcessor, AutoModelForPreTraining
-    eval_model = LlavaEvalModel(processor = AutoProcessor.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"),
-    model = AutoModelForPreTraining.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"))
+    eval_model = LlavaEvalModel(
+            processor = AutoProcessor.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"),
+            model = AutoModelForPreTraining.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf"))
 
 elif model_type == "tinyllava":
     from transformers import AutoProcessor, AutoModelForPreTraining
     from model_classes.tinyllava import TinyLlavaEvalModel
-    eval_model = TinyLlavaEvalModel(processor = AutoProcessor.from_pretrained("bczhou/tiny-llava-v1-hf"),
-model = AutoModelForPreTraining.from_pretrained("bczhou/tiny-llava-v1-hf"))
+    eval_model = TinyLlavaEvalModel(
+            processor = AutoProcessor.from_pretrained("bczhou/tiny-llava-v1-hf"),
+            model = AutoModelForPreTraining.from_pretrained("bczhou/tiny-llava-v1-hf"))
+
+elif model_type in ["babylm_git_2024", "babylm_flamingo_2024"]:
+    from model_classes.babylm_models import BabyLMEvalModel
+    from transformers import AutoProcessor, AutoModelForCausalLM
+    if model_type == "babylm_flamingo_2024":
+        model_name = 'babylm/flamingo-2024'
+    else:
+        model_name = 'babylm/git-2024'
+
+    eval_model = BabyLMEvalModel(
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name, trust_remote_code=True), 
+        processor = AutoProcessor.from_pretrained(model_name),
+    )
 
 else:
     raise Exception(f"No implementation found for model '{model_type}'")
@@ -120,6 +136,16 @@ print("getting all sim scores lwl")
 lwl_sims = eval_model.get_all_sim_scores(lwl_dl)
 np.save(f"evals/lex-lwl/lwl_{model_type}.npy", lwl_sims)
 
+wg_ds = data_handling.DevBenchDataset("assets/gram-winoground/")
+wg_dl = data_handling.make_dataloader(wg_ds)
+wg_sims = eval_model.get_all_sim_scores(wg_dl)
+np.save(f"evals/gram-winoground/wg_{model_type}.npy", wg_sims)
+
+things_ds = data_handling.DevBenchDataset("assets/sem-things/")
+things_dl = data_handling.make_dataloader(things_ds)
+things_embeds = eval_model.get_all_image_feats(things_dl)
+np.save(f"evals/sem-things/things_{model_type}.npy", things_embeds)
+
 if False:
     vv_ds = data_handling.DevBenchDataset("assets/lex-viz_vocab/")
     vv_dl = data_handling.make_dataloader(vv_ds)
@@ -132,23 +158,12 @@ if False:
     trog_sims = eval_model.get_all_sim_scores(trog_dl)
     np.save(f"evals/gram-trog/trog_{model_type}.npy", trog_sims)
 
-wg_ds = data_handling.DevBenchDataset("assets/gram-winoground/")
-wg_dl = data_handling.make_dataloader(wg_ds)
-wg_sims = eval_model.get_all_sim_scores(wg_dl)
-np.save(f"evals/gram-winoground/wg_{model_type}.npy", wg_sims)
+    voc_ds = data_handling.DevBenchDataset("assets/sem-viz_obj_cat/")
+    voc_dl = data_handling.make_dataloader(voc_ds)
+    voc_embeds = eval_model.get_all_image_feats(voc_dl)
+    np.save(f"evals/sem-viz_obj_cat/voc_{model_type}.npy", voc_embeds)
 
-#Semantic tasks
-# voc_ds = data_handling.DevBenchDataset("assets/sem-viz_obj_cat/")
-# voc_dl = data_handling.make_dataloader(voc_ds)
-# voc_embeds = eval_model.get_all_image_feats(voc_dl)
-# np.save(f"evals/sem-viz_obj_cat/voc_{model_type}.npy", voc_embeds)
-
-things_ds = data_handling.DevBenchDataset("assets/sem-things/")
-things_dl = data_handling.make_dataloader(things_ds)
-things_embeds = eval_model.get_all_image_feats(things_dl)
-np.save(f"evals/sem-things/things_{model_type}.npy", things_embeds)
-
-# wat_ds = data_handling.DevBenchDataset("assets/sem-wat/")
-# wat_dl = data_handling.make_dataloader(wat_ds)
-# wat_embeds = eval_model.get_all_text_feats(wat_dl)
-# np.save(f"evals/sem-wat/wat_{model_type}.npy", wat_embeds)
+    wat_ds = data_handling.DevBenchDataset("assets/sem-wat/")
+    wat_dl = data_handling.make_dataloader(wat_ds)
+    wat_embeds = eval_model.get_all_text_feats(wat_dl)
+    np.save(f"evals/sem-wat/wat_{model_type}.npy", wat_embeds)

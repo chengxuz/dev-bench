@@ -63,6 +63,8 @@ def compare_wg(model_data, human_data):
 oc_files = glob(WG_DIR + "openclip/*.npy")
 oc_kls = []
 for ocf in oc_files:
+    if not os.path.exists(ocf):
+        continue
     res = np.load(ocf)
     res = pd.DataFrame(res.reshape((-1, 4)),
                        columns = ["image1text1", "image1text2", "image2text1", "image2text2"]) # order is different than R
@@ -74,13 +76,16 @@ for ocf in oc_files:
     kls['epoch'] = int(os.path.splitext(os.path.basename(ocf))[0].replace("openclip_epoch_", ""))
     kls['accuracy'] = acc
     oc_kls.append(kls)
-openclip_div_wg = pd.concat(oc_kls).sort_values(["epoch"]).reset_index(drop=True)
-openclip_div_wg.to_csv("comparison/gram-wg_openclip.csv")
+if len(oc_kls) > 0:
+    openclip_div_wg = pd.concat(oc_kls).sort_values(["epoch"]).reset_index(drop=True)
+    openclip_div_wg.to_csv("comparison/gram-wg_openclip.csv")
 
 # comparisons for other models
 wg_files = glob(WG_DIR + "*.npy") + [WG_DIR + "openclip/openclip_epoch_256.npy"]
 all_kls = []
 for wgf in wg_files:
+    if not os.path.exists(wgf):
+        continue
     res = np.load(wgf)
     res = pd.DataFrame(res.reshape((-1, 4)),
                        columns = ["image1text1", "image1text2", "image2text1", "image2text2"]) # order is different than R
@@ -91,6 +96,7 @@ for wgf in wg_files:
     kls = compare_wg(res, human_data_wg)
     kls['model'] = os.path.splitext(os.path.basename(wgf))[0].replace("wg_", "").replace("_epoch_256", "")
     kls['accuracy'] = acc
+    print(kls)
     all_kls.append(kls)
 other_res_wg = pd.concat(all_kls).sort_values(["model"]).reset_index(drop=True)
 other_res_wg.to_csv("comparison/gram-wg_models.csv")
